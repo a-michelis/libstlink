@@ -26,7 +26,7 @@ int32_t arg_parse_freq(const char *str) {
     int32_t value = -1;
     if (str != NULL) {
             char* tail = NULL;
-        value = strtol(str, &tail, 10);
+        value = (int)strtol(str, &tail, 10);
         if (tail != NULL) {
             if (tail[0] == 'M' && tail[1] == '\0') {
                 value = value*1000;
