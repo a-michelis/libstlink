@@ -24,7 +24,7 @@
 #include "chipid.h"
 #include "common_flash.h"
 #include "helper.h"
-#include "logging.h"
+#include "logging_new.h"
 #include "map_file.h"
 #include "md5.h"
 #include "read_write.h"
@@ -1042,7 +1042,7 @@ uint32_t stlink_calculate_pagesize(stlink_t *sl, uint32_t flashaddr) {
 }
 
 void stlink_print_data(stlink_t *sl) {
-  if(sl->q_len <= 0 || sl->verbose < UDEBUG) {
+  if (sl->q_len <= 0 ) {
     return;
   }
 

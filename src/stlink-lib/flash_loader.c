@@ -16,7 +16,7 @@
 #include "flash_loader.h"
 #include "common_flash.h"
 #include "helper.h"
-#include "logging.h"
+#include "logging_new.h"
 #include "read_write.h"
 
 #define FLASH_REGS_BANK2_OFS      0x40

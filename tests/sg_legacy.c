@@ -7,7 +7,7 @@
 
 #include <stlink.h>
 
-#include <logging.h>
+#include <logging_new.h>
 #include <read_write.h>
 #include <sg_legacy.h>
 

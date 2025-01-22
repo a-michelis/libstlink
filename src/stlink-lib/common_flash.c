@@ -15,7 +15,7 @@
 
 #include "calculate.h"
 #include "flash_loader.h"
-#include "logging.h"
+#include "logging_new.h"
 #include "map_file.h"
 #include "md5.h"
 #include "read_write.h"

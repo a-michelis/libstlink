@@ -181,7 +181,8 @@ set(STLINK_HEADERS
         src/stlink-lib/helper.h
         src/stlink-lib/libusb_settings.h
         src/stlink-lib/lib_md5.h
-        src/stlink-lib/logging.h
+#        src/stlink-lib/logging.h
+        src/stlink-lib/logging_new.h
         src/stlink-lib/logging_spdlog_wr.h
         src/stlink-lib/map_file.h
         src/stlink-lib/md5.h
@@ -200,7 +201,8 @@ set(STLINK_SOURCE
         src/stlink-lib/flash_loader.c
         src/stlink-lib/helper.c
         src/stlink-lib/lib_md5.c
-        src/stlink-lib/logging.c
+#        src/stlink-lib/logging.c
+        src/stlink-lib/logging_new.c
         src/stlink-lib/map_file.c
         src/stlink-lib/md5.c
         src/stlink-lib/option_bytes.c

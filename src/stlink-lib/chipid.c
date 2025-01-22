@@ -13,7 +13,7 @@
 #include <stlink.h>
 #include "chipid.h"
 
-#include "logging.h"
+#include "logging_new.h"
 
 // #include <ctype.h> // TODO: Check use
 // #include <errno.h> // TODO: Check use

@@ -15,7 +15,7 @@
 #include <stm32_register.h>
 
 #include <chipid.h>
-#include <logging.h>
+#include <logging_new.h>
 #include <read_write.h>
 #include <usb.h>
 
@@ -188,7 +188,16 @@ bool parse_options(int32_t argc, char **argv, st_settings_t *settings) {
   settings->reset_board = true;
   settings->force = false;
   settings->serial_number = NULL;
-  ugly_init(settings->logging_level);
+  
+  if (settings->logging_level < 30) stlink_set_loglevel(STLL_ERR);
+  else if (settings->logging_level < 50) stlink_set_loglevel(STLL_WARN);
+  else if (settings->logging_level < 90) stlink_set_loglevel(STLL_INFO);
+  else {
+      stlink_set_loglevel(STLL_DEBUG);
+      stlink_set_tracelevel(0);
+  }
+  
+//  ugly_init(settings->logging_level);
 
   while ((c = getopt_long(argc, argv, "hVv::c:ns:f", long_options, &option_index)) != -1) {
     switch (c) {
@@ -204,7 +213,16 @@ bool parse_options(int32_t argc, char **argv, st_settings_t *settings) {
       } else {
         settings->logging_level = DEBUG_LOGGING_LEVEL;
       }
-      ugly_init(settings->logging_level);
+      
+      if (settings->logging_level < 30) stlink_set_loglevel(STLL_ERR);
+      else if (settings->logging_level < 50) stlink_set_loglevel(STLL_WARN);
+      else if (settings->logging_level < 90) stlink_set_loglevel(STLL_INFO);
+      else {
+          stlink_set_loglevel(STLL_DEBUG);
+          stlink_set_tracelevel(0);
+      }
+      
+//      ugly_init(settings->logging_level);
       break;
     case 'c':
       if(!parse_frequency(optarg, &settings->core_frequency)) error = true;

@@ -12,7 +12,7 @@
 #include <stlink_backend.h>
 #include "read_write.h"
 
-#include "logging.h"
+#include "logging_new.h"
 
 // Endianness
 // https://commandcenter.blogspot.com/2012/04/byte-order-fallacy.html

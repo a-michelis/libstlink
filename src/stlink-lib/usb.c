@@ -27,7 +27,7 @@
 #include <stlink_cmd.h>
 #include <stm32_register.h>
 
-#include "logging.h"
+#include "logging_new.h"
 #include "read_write.h"
 #include "usb.h"
 
@@ -116,7 +116,7 @@ ssize_t send_recv(struct stlink_libusb* handle, int32_t terminate, unsigned char
             }
 
             /* Checking the command execution status stored in the first byte of the response */
-            if(handle->protocol != 1 && check_error >= CMD_CHECK_STATUS && 
+            if(handle->protocol != 1 && check_error >= CMD_CHECK_STATUS &&
                         rxbuf[0] != STLINK_DEBUG_ERR_OK) {
                 switch(rxbuf[0]) {
                 case STLINK_DEBUG_ERR_AP_WAIT:
@@ -1148,7 +1148,7 @@ uint32_t stlink_serial(struct libusb_device_handle *handle, struct libusb_device
  * @retval NULL   Error while opening the stlink
  * @retval !NULL  Stlink found and ready to use
  */
-stlink_t *stlink_open_usb(enum ugly_loglevel verbose, enum connect_type connect, char serial[STLINK_SERIAL_BUFFER_SIZE], int32_t freq) {
+stlink_t *stlink_open_usb(st_loglevel verbose, enum connect_type connect, char serial[STLINK_SERIAL_BUFFER_SIZE], int32_t freq) {
     stlink_t* sl = NULL;
     struct stlink_libusb* slu = NULL;
     int32_t ret = -1;
@@ -1158,9 +1158,14 @@ stlink_t *stlink_open_usb(enum ugly_loglevel verbose, enum connect_type connect,
     if(sl == NULL) { goto on_malloc_error; }
 
     slu = calloc(1, sizeof(struct stlink_libusb));
-    if(slu == NULL) { goto on_malloc_error; }
-
-    ugly_init(verbose);
+    if (slu == NULL) { goto on_malloc_error; }
+    
+    stlink_set_loglevel(verbose);
+    if (verbose > STLL_DEBUG)
+    {
+        stlink_set_tracelevel(verbose - STLL_DEBUG);
+    }
+    
     sl->backend = &_stlink_usb_backend;
     sl->backend_data = slu;
 

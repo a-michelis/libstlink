@@ -38,7 +38,7 @@
 #include <common_flash.h>
 #include <flash_loader.h>
 #include <helper.h>
-#include <logging.h>
+#include <logging_new.h>
 #include <read_write.h>
 #include <usb.h>
 

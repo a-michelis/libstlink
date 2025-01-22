@@ -97,7 +97,7 @@
 #include <stm32_register.h>
 
 #include "sg_legacy.h"
-#include "logging.h"
+#include "logging_new.h"
 #include "read_write.h"
 #include "usb.h"
 // #include <stlink.h>    // TODO: Check use
@@ -1080,7 +1080,14 @@ static stlink_t* stlink_open(const int32_t verbose) {
 
 
 stlink_t* stlink_v1_open_inner(const int32_t verbose) {
-    ugly_init(verbose);
+    if (verbose) stlink_set_loglevel(STLL_ERR);
+    else if (verbose < 50) stlink_set_loglevel(STLL_WARN);
+    else if (verbose < 90) stlink_set_loglevel(STLL_INFO);
+    else {
+        stlink_set_loglevel(STLL_DEBUG);
+        stlink_set_tracelevel(0);
+    }
+//    ugly_init(verbose);
     stlink_t *sl = stlink_open(verbose);
 
     if(sl == NULL) {
