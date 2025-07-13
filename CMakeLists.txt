@@ -82,13 +82,27 @@ message(STATUS "Checking for OS_NAME: ${OS_NAME}")
 ## Set C build flags
 if (NOT MSVC)
     include(${CMAKE_MODULE_PATH}/c_flags.cmake)
+
+    set(CMAKE_RUNTIME_INSTALL_DIRECTORY ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR})
+    set(CMAKE_LIBRARY_INSTALL_DIRECTORY ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR})
+    set(CMAKE_ARCHIVE_INSTALL_DIRECTORY ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR})
 else ()
     message(STATUS "MSVC C Flags override to /MT")
     set(CMAKE_C_FLAGS_DEBUG_INIT          "/D_DEBUG /MTd /Zi /Ob0 /Od /RTC1")
     set(CMAKE_C_FLAGS_MINSIZEREL_INIT     "/MT /O1 /Ob1 /D NDEBUG")
     set(CMAKE_C_FLAGS_RELEASE_INIT        "/MT /O2 /Ob2 /D NDEBUG")
     set(CMAKE_C_FLAGS_RELWITHDEBINFO_INIT "/MT /Zi /O2 /Ob1 /D NDEBUG")
+
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/dist/bin)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/dist/bin)
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/dist/lib)
+
+    set(CMAKE_RUNTIME_INSTALL_DIRECTORY ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR})
+    set(CMAKE_LIBRARY_INSTALL_DIRECTORY ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR})
+    set(CMAKE_ARCHIVE_INSTALL_DIRECTORY ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR})
 endif()
+
+set(CMAKE_INCLUDES_INSTALL_DIRECTORY ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR})
 
 
 ###
@@ -168,7 +182,7 @@ endif()
 
 ## Subordinate CMakeLists for version config & header installation
 add_subdirectory(inc)
-
+add_subdirectory(src/spdlogger)
 ## Define source- and headerfiles for stlink library
 set(STLINK_HEADERS
         inc/stlink.h
@@ -277,28 +291,16 @@ set_target_properties(${STLINK_LIB_SHARED} PROPERTIES
 
 # Link shared library
 if (WIN32)
-    target_link_libraries(${STLINK_LIB_SHARED} ${LIBUSB_LIBRARY} ${SSP_LIB} wsock32 ws2_32)
+    target_link_libraries(${STLINK_LIB_SHARED} logger ${LIBUSB_LIBRARY} ${SSP_LIB} wsock32 ws2_32)
 else ()
-    target_link_libraries(${STLINK_LIB_SHARED} ${LIBUSB_LIBRARY} ${SSP_LIB})
+    target_link_libraries(${STLINK_LIB_SHARED} logger ${LIBUSB_LIBRARY} ${SSP_LIB})
 endif()
 
-# For MSVC:
-#    shared libraries (.dll) go to `bin`
-#    their Import Libraries (aka: ImpLibs; .lib files) go to `lib`
-if (MSVC)
-    install(TARGETS ${STLINK_LIB_SHARED}
-            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-            LIBRARY DESTINATION ${CMAKE_INSTALL_BINDIR}
-            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-# For non-MSVC:
-#    shared libraries go to `lib`
-#    Archive destination is set to `lib` as failsafe
-else()
-    install(TARGETS ${STLINK_LIB_SHARED}
-            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-endif()
+# Installation
+install(TARGETS ${STLINK_LIB_SHARED}
+        RUNTIME DESTINATION ${CMAKE_RUNTIME_INSTALL_DIRECTORY}
+        LIBRARY DESTINATION ${CMAKE_LIBRARY_INSTALL_DIRECTORY}
+        ARCHIVE DESTINATION ${CMAKE_ARCHIVE_INSTALL_DIRECTORY})
 
 ###
 # Static library
@@ -325,12 +327,12 @@ set_target_properties(${STLINK_LIB_STATIC} PROPERTIES
 
 # Link static library
 if (WIN32)
-    target_link_libraries(${STLINK_LIB_STATIC} ${LIBUSB_LIBRARY} ${SSP_LIB} wsock32 ws2_32)
+    target_link_libraries(${STLINK_LIB_STATIC} logger ${LIBUSB_LIBRARY} ${SSP_LIB} wsock32 ws2_32)
 else ()
-    target_link_libraries(${STLINK_LIB_STATIC} ${LIBUSB_LIBRARY} ${SSP_LIB})
+    target_link_libraries(${STLINK_LIB_STATIC} logger ${LIBUSB_LIBRARY} ${SSP_LIB})
 endif()
 
-install(TARGETS ${STLINK_LIB_STATIC} ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(TARGETS ${STLINK_LIB_STATIC} ARCHIVE DESTINATION ${CMAKE_ARCHIVE_INSTALL_DIRECTORY})
 
 
 ###
@@ -366,10 +368,10 @@ else ()
     target_link_libraries(st-trace ${STLINK_LIB_SHARED})
 endif()
 
-install(TARGETS st-flash DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(TARGETS st-info DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(TARGETS st-util DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(TARGETS st-trace DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS st-flash DESTINATION ${CMAKE_RUNTIME_INSTALL_DIRECTORY})
+install(TARGETS st-info DESTINATION ${CMAKE_RUNTIME_INSTALL_DIRECTORY})
+install(TARGETS st-util DESTINATION ${CMAKE_RUNTIME_INSTALL_DIRECTORY})
+install(TARGETS st-trace DESTINATION ${CMAKE_RUNTIME_INSTALL_DIRECTORY})
 
 
 ###
