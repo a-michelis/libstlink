@@ -182,7 +182,7 @@ endif()
 
 ## Subordinate CMakeLists for version config & header installation
 add_subdirectory(inc)
-add_subdirectory(src/spdlogger)
+add_subdirectory(src/stlogger)
 ## Define source- and headerfiles for stlink library
 set(STLINK_HEADERS
         inc/stlink.h
@@ -197,8 +197,6 @@ set(STLINK_HEADERS
         src/stlink-lib/helper.h
         src/stlink-lib/libusb_settings.h
         src/stlink-lib/lib_md5.h
-        src/stlink-lib/logging.h
-        src/stlink-lib/logging_spdlog_wr.h
         src/stlink-lib/map_file.h
         src/stlink-lib/md5.h
         src/stlink-lib/option_bytes.h
@@ -216,7 +214,6 @@ set(STLINK_SOURCE
         src/stlink-lib/flash_loader.c
         src/stlink-lib/helper.c
         src/stlink-lib/lib_md5.c
-        src/stlink-lib/logging.c
         src/stlink-lib/map_file.c
         src/stlink-lib/md5.c
         src/stlink-lib/option_bytes.c
@@ -291,9 +288,9 @@ set_target_properties(${STLINK_LIB_SHARED} PROPERTIES
 
 # Link shared library
 if (WIN32)
-    target_link_libraries(${STLINK_LIB_SHARED} logger ${LIBUSB_LIBRARY} ${SSP_LIB} wsock32 ws2_32)
+    target_link_libraries(${STLINK_LIB_SHARED} st-logger ${LIBUSB_LIBRARY} ${SSP_LIB} wsock32 ws2_32)
 else ()
-    target_link_libraries(${STLINK_LIB_SHARED} logger ${LIBUSB_LIBRARY} ${SSP_LIB})
+    target_link_libraries(${STLINK_LIB_SHARED} st-logger ${LIBUSB_LIBRARY} ${SSP_LIB})
 endif()
 
 # Installation
@@ -325,11 +322,12 @@ set_target_properties(${STLINK_LIB_STATIC} PROPERTIES
                         OUTPUT_NAME ${STLINK_LIB_STATIC_OUTPUT_NAME}
                         )
 
+
 # Link static library
 if (WIN32)
-    target_link_libraries(${STLINK_LIB_STATIC} logger ${LIBUSB_LIBRARY} ${SSP_LIB} wsock32 ws2_32)
+    target_link_libraries(${STLINK_LIB_STATIC} st-logger ${LIBUSB_LIBRARY} ${SSP_LIB} wsock32 ws2_32)
 else ()
-    target_link_libraries(${STLINK_LIB_STATIC} logger ${LIBUSB_LIBRARY} ${SSP_LIB})
+    target_link_libraries(${STLINK_LIB_STATIC} st-logger ${LIBUSB_LIBRARY} ${SSP_LIB})
 endif()
 
 install(TARGETS ${STLINK_LIB_STATIC} ARCHIVE DESTINATION ${CMAKE_ARCHIVE_INSTALL_DIRECTORY})
