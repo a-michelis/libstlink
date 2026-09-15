@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/types.h> // for off_t, which the lseek below takes
 
 #if defined(_MSC_VER) && !defined(_SSIZE_T_DEFINED)
 #include <basetsd.h>
