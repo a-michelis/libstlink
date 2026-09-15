@@ -162,6 +162,14 @@ list(APPEND STLINK_HEADERS ${STLINK_LIB_HEADERS})
 
 file(GLOB STLINK_LIB_SOURCES
     "${CMAKE_SOURCE_DIR}/src/stlink-lib/*.c")
+
+# Drop every USB transport implementation the glob picked up and add back the
+# one selected in src/stlink-env, so that the others are not built anywhere.
+foreach (_backend ${STLINK_USB_BACKEND_SOURCES_ALL})
+    list(REMOVE_ITEM STLINK_LIB_SOURCES "${CMAKE_SOURCE_DIR}/src/stlink-lib/${_backend}")
+endforeach()
+list(APPEND STLINK_LIB_SOURCES "${CMAKE_SOURCE_DIR}/src/stlink-lib/${STLINK_USB_BACKEND_SOURCE}")
+
 list(APPEND STLINK_SOURCES ${STLINK_LIB_SOURCES})
 
 # Install library header files
@@ -202,7 +210,7 @@ set_target_properties(${STLINK_LIB_SHARED} PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS
 # Link shared library using modern imported target
 if (WIN32)
     target_link_libraries(${STLINK_LIB_SHARED} 
-        libusb::libusb
+        ${STLINK_USB_BACKEND_LIBRARIES}
         ${STLINK_THREAD_LIBRARY}
         ${SSP_LIB}
         wsock32
@@ -210,7 +218,7 @@ if (WIN32)
     )
 else ()
     target_link_libraries(${STLINK_LIB_SHARED}
-        libusb::libusb
+        ${STLINK_USB_BACKEND_LIBRARIES}
         ${STLINK_THREAD_LIBRARY}
         ${SSP_LIB}
     )
@@ -264,7 +272,7 @@ set_target_properties(${STLINK_LIB_STATIC} PROPERTIES
 # Link static library using modern imported target
 if (WIN32)
     target_link_libraries(${STLINK_LIB_STATIC}
-        libusb::libusb
+        ${STLINK_USB_BACKEND_LIBRARIES}
         ${STLINK_THREAD_LIBRARY}
         ${SSP_LIB}
         wsock32
@@ -272,7 +280,7 @@ if (WIN32)
     )
 else ()
     target_link_libraries(${STLINK_LIB_STATIC}
-        libusb::libusb
+        ${STLINK_USB_BACKEND_LIBRARIES}
         ${STLINK_THREAD_LIBRARY}
         ${SSP_LIB}
     )

@@ -59,9 +59,28 @@ else ()
 endif()
 
 
-### libusb
+### USB transport implementation
 
-find_package(libusb REQUIRED)
+# Only one implementation of the interface in src/stlink-lib/usb_backend.h is
+# compiled, so it is named here rather than globbed with the rest of the
+# library. Selecting it also decides which libraries have to be found.
+
+set(STLINK_USB_BACKEND "libusb" CACHE STRING "USB transport implementation to build")
+set_property(CACHE STLINK_USB_BACKEND PROPERTY STRINGS libusb)
+
+# Every implementation there is, so that the ones not picked can be kept out of
+# the library sources.
+set(STLINK_USB_BACKEND_SOURCES_ALL usb_libusb.c)
+
+if (STLINK_USB_BACKEND STREQUAL "libusb")
+    find_package(libusb REQUIRED)
+    set(STLINK_USB_BACKEND_SOURCE usb_libusb.c)
+    set(STLINK_USB_BACKEND_LIBRARIES libusb::libusb)
+else ()
+    message(FATAL_ERROR "Unknown STLINK_USB_BACKEND '${STLINK_USB_BACKEND}'")
+endif()
+
+message(STATUS "USB transport: ${STLINK_USB_BACKEND}")
 
 
 ### Stack Smashing Protection Library (SSP)
@@ -134,3 +153,6 @@ set(STLINK_HEADERS ${STLINK_HEADERS} PARENT_SCOPE)
 set(STLINK_DEFINITIONS ${STLINK_DEFINITIONS} PARENT_SCOPE)
 set(STLINK_COMPILE_OPTIONS ${STLINK_COMPILE_OPTIONS} PARENT_SCOPE)
 set(STLINK_INCLUDE_DIRS ${STLINK_INCLUDE_DIRS} PARENT_SCOPE)
+set(STLINK_USB_BACKEND_SOURCE ${STLINK_USB_BACKEND_SOURCE} PARENT_SCOPE)
+set(STLINK_USB_BACKEND_SOURCES_ALL ${STLINK_USB_BACKEND_SOURCES_ALL} PARENT_SCOPE)
+set(STLINK_USB_BACKEND_LIBRARIES ${STLINK_USB_BACKEND_LIBRARIES} PARENT_SCOPE)
