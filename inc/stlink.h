@@ -69,8 +69,7 @@ enum target_state {
 #define STLINK_SWDCLK_15KHZ_DIVISOR         265
 #define STLINK_SWDCLK_5KHZ_DIVISOR          798
 
-#define STLINK_SERIAL_LENGTH                 24
-#define STLINK_SERIAL_BUFFER_SIZE   (STLINK_SERIAL_LENGTH + 1)
+#include <stlink_serial.h>
 
 #define STLINK_V3_MAX_FREQ_NB                10
 
