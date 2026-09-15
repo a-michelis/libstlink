@@ -35,7 +35,7 @@
 #include <logging.h>
 #include <read_write.h>
 #include <remote.h>
-#include <usb.h>
+#include <stlink_usb.h>
 
 
 #define DEFAULT_LOGGING_LEVEL 50

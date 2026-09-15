@@ -48,7 +48,7 @@
 #include <logging.h>
 #include <read_write.h>
 #include <remote.h>
-#include <usb.h>
+#include <stlink_usb.h>
 
 
 #define STRINGIFY_inner(name) #name

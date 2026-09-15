@@ -23,7 +23,7 @@
 #include <chipid.h>
 #include <helper.h>
 #include <remote.h>
-#include <usb.h>
+#include <stlink_usb.h>
 
 
 // static void usage(void);

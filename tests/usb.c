@@ -14,7 +14,7 @@
 #include <stm32_register.h>
 
 #include <read_write.h>
-#include <usb.h>
+#include <stlink_usb.h>
 
 static void usage(void) {
     puts("test-usb --reset");

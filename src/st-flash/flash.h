@@ -34,7 +34,7 @@
 #include <map_file.h>
 #include <option_bytes.h>
 #include <remote.h>
-#include <usb.h>
+#include <stlink_usb.h>
 
 
 #define DEBUG_LOG_LEVEL 100

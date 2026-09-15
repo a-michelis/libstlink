@@ -1,6 +1,6 @@
 /**
   ******************************************************************************
-  * @file           : usb.h
+  * @file           : stlink_usb.h
   * @brief          : USB commands & interaction with ST-LINK devices
   * @copyright      : Copyright (c) 2026 stlink-org. All rights reserved.
   * @date           : 2026-07-27
@@ -11,8 +11,8 @@
   ******************************************************************************
   */
 
-#ifndef USB_H
-#define USB_H
+#ifndef STLINK_USB_H
+#define STLINK_USB_H
 
 #if !defined(_MSC_VER)
 #include <sys/time.h>
@@ -138,4 +138,4 @@ stlink_t *stlink_open_usb(enum ugly_loglevel verbose, enum connect_type connect,
 uint32_t stlink_probe_usb(stlink_t **stdevs[], enum connect_type connect, int32_t freq);
 void stlink_probe_usb_free(stlink_t **stdevs[], uint32_t size);
 
-#endif // USB_H
+#endif // STLINK_USB_H

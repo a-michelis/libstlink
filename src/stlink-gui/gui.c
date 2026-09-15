@@ -23,7 +23,7 @@
 #include <chipid.h>
 #include <common_flash.h>
 #include <read_write.h>
-#include <usb.h>
+#include <stlink_usb.h>
 
 #include "gui.h"
 

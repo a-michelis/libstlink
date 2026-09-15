@@ -11,7 +11,7 @@
   ******************************************************************************
   */
 
-#include "usb.h"
+#include "stlink_usb.h"
 
 #include <stlink_thread.h>
 

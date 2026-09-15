@@ -298,7 +298,7 @@ void stlink_run_at(stlink_t *sl, stm32_addr_t addr);
 #include <flash_loader.h>
 #include <logging.h>
 #include <sg_legacy.h>
-#include <usb.h>
+#include <stlink_usb.h>
 #include <version.h>
 
 #ifdef __cplusplus

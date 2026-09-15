@@ -89,7 +89,7 @@
 
 #include "logging.h"
 #include "read_write.h"
-#include "usb.h"
+#include "stlink_usb.h"
 
 
 #define STLINK_OK    0x80

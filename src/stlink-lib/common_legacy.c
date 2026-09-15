@@ -26,7 +26,7 @@
 #include "map_file.h"
 #include "md5.h"
 #include "read_write.h"
-#include "usb.h"
+#include "stlink_usb.h"
 
 
 #ifndef O_BINARY
