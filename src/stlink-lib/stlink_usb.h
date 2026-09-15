@@ -80,7 +80,7 @@
 
 enum SCSI_Generic_Direction {SG_DXFER_TO_DEV = 0, SG_DXFER_FROM_DEV = 0x80};
 
-struct stlink_libusb {
+struct stlink_usb_handle {
     struct stlink_usb usb;      // the transport, see usb_backend.h
     uint32_t ep_req;
     uint32_t ep_rep;
@@ -93,9 +93,9 @@ struct stlink_libusb {
 // static inline uint32_t le_to_h_u32(const uint8_t* buf);
 // static int32_t _stlink_match_speed_map(const uint32_t *map, uint32_t map_size, uint32_t khz);
 void _stlink_usb_close(stlink_t* sl);
-ssize_t send_recv(struct stlink_libusb* handle, int32_t terminate, unsigned char* txbuf, uint32_t txsize,
+ssize_t send_recv(struct stlink_usb_handle* handle, int32_t terminate, unsigned char* txbuf, uint32_t txsize,
                     unsigned char* rxbuf, uint32_t rxsize, int32_t check_error, const char *cmd);
-// static inline int32_t send_only(struct stlink_libusb* handle, int32_t terminate, unsigned char* txbuf,
+// static inline int32_t send_only(struct stlink_usb_handle* handle, int32_t terminate, unsigned char* txbuf,
 //                                  uint32_t txsize, const char *cmd);
 // static int32_t fill_command(stlink_t * sl, enum SCSI_Generic_Direction dir, uint32_t len);
 int32_t _stlink_usb_version(stlink_t *sl);
