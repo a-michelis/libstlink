@@ -18,10 +18,11 @@
 
 #include <stlink.h>
 #include <stlink_backend.h>
+
+#include "usb_backend.h"
 #include <stlink_cmd.h>
 #include <stm32_register.h>
 
-#include "libusb_settings.h"
 
 
 /* Device access */
@@ -48,8 +49,7 @@
 #define SENSE_BUF_LEN       32
 
 struct stlink_libsg {
-    libusb_context* libusb_ctx;
-    libusb_device_handle *usb_handle;
+    struct stlink_usb usb;      // the transport, see usb_backend.h
     uint32_t ep_rep;
     uint32_t ep_req;
 
@@ -71,12 +71,12 @@ struct stlink_libsg {
 
 // static void clear_cdb(struct stlink_libsg *sl);
 void _stlink_sg_close(stlink_t *sl);
-// static int32_t get_usb_mass_storage_status(libusb_device_handle *handle, uint8_t endpoint, uint32_t *tag);
+// static int32_t get_usb_mass_storage_status(struct stlink_usb *usb, uint8_t endpoint, uint32_t *tag);
 // static int32_t dump_CDB_command(uint8_t *cdb, uint8_t cdb_len);
-int32_t send_usb_mass_storage_command(libusb_device_handle *handle, uint8_t endpoint_out, uint8_t *cdb, uint8_t cdb_length,
+int32_t send_usb_mass_storage_command(struct stlink_usb *usb, uint8_t endpoint_out, uint8_t *cdb, uint8_t cdb_length,
                                         uint8_t lun, uint8_t flags, uint32_t expected_rx_size);
-// static void get_sense(libusb_device_handle *handle, uint8_t endpoint_in, uint8_t endpoint_out);
-int32_t send_usb_data_only(libusb_device_handle *handle, unsigned char endpoint_out,
+// static void get_sense(struct stlink_usb *usb, uint8_t endpoint_in, uint8_t endpoint_out);
+int32_t send_usb_data_only(struct stlink_usb *usb, unsigned char endpoint_out,
                        unsigned char endpoint_in, unsigned char *cbuf, uint32_t length);
 int32_t stlink_q(stlink_t *sl);
 void stlink_stat(stlink_t *stl, char *txt);

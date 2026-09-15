@@ -110,13 +110,13 @@ static void clear_cdb(struct stlink_libsg *sl) {
 void _stlink_sg_close(stlink_t *sl) {
     if(sl) {
         struct stlink_libsg *slsg = sl->backend_data;
-        libusb_close(slsg->usb_handle);
-        libusb_exit(slsg->libusb_ctx);
+        stlink_usb_close(&slsg->usb);
+        stlink_usb_exit(&slsg->usb);
         free(slsg);
     }
 }
 
-static int32_t get_usb_mass_storage_status(libusb_device_handle *handle, uint8_t endpoint, uint32_t *tag) {
+static int32_t get_usb_mass_storage_status(struct stlink_usb *usb, uint8_t endpoint, uint32_t *tag) {
     unsigned char csw[13];
     memset(csw, 0, sizeof(csw));
     int32_t transferred;
@@ -124,15 +124,15 @@ static int32_t get_usb_mass_storage_status(libusb_device_handle *handle, uint8_t
     int32_t try = 0;
 
     do {
-        ret = libusb_bulk_transfer(handle, endpoint, (unsigned char *)&csw, sizeof(csw),
-                                   &transferred, SG_TIMEOUT_MSEC);
+        ret = stlink_usb_read(usb, endpoint, (uint8_t *)&csw, sizeof(csw),
+                              SG_TIMEOUT_MSEC, &transferred);
 
-        if(ret == LIBUSB_ERROR_PIPE) { libusb_clear_halt(handle, endpoint); }
+        if(stlink_usb_is_stall(usb, ret)) { stlink_usb_clear_halt(usb, endpoint); }
 
         try++;
-    } while ((ret == LIBUSB_ERROR_PIPE) && (try < 3));
+    } while (stlink_usb_is_stall(usb, ret) && (try < 3));
 
-    if(ret != LIBUSB_SUCCESS) {
+    if(ret != 0) {
         WLOG("%s: receiving failed: %d\n", __func__, ret);
         return (-1);
     }
@@ -183,7 +183,7 @@ static int32_t dump_CDB_command(uint8_t *cdb, uint8_t cdb_len) {
  * @param expected_rx_size
  * @return
  */
-int32_t send_usb_mass_storage_command(libusb_device_handle *handle, uint8_t endpoint_out, uint8_t *cdb, uint8_t cdb_length,
+int32_t send_usb_mass_storage_command(struct stlink_usb *usb, uint8_t endpoint_out, uint8_t *cdb, uint8_t cdb_length,
                                         uint8_t lun, uint8_t flags, uint32_t expected_rx_size) {
     DLOG("Sending usb m-s cmd: cdblen:%d, rxsize=%d\n", cdb_length, expected_rx_size);
     dump_CDB_command(cdb, cdb_length);
@@ -220,17 +220,17 @@ int32_t send_usb_mass_storage_command(libusb_device_handle *handle, uint8_t endp
 
     // send....
     do {
-        ret = libusb_bulk_transfer(handle, endpoint_out, c_buf, sending_length,
-                                   &real_transferred, SG_TIMEOUT_MSEC);
+        ret = stlink_usb_write(usb, endpoint_out, c_buf, (uint32_t) sending_length,
+                               SG_TIMEOUT_MSEC, &real_transferred);
 
-        if(ret == LIBUSB_ERROR_PIPE) {
-            libusb_clear_halt(handle, endpoint_out);
+        if(stlink_usb_is_stall(usb, ret)) {
+            stlink_usb_clear_halt(usb, endpoint_out);
         }
 
         try++;
-    } while ((ret == LIBUSB_ERROR_PIPE) && (try < 3));
+    } while (stlink_usb_is_stall(usb, ret) && (try < 3));
 
-    if(ret != LIBUSB_SUCCESS) {
+    if(ret != 0) {
         WLOG("sending failed: %d\n", ret);
         return (-1);
     }
@@ -244,7 +244,7 @@ int32_t send_usb_mass_storage_command(libusb_device_handle *handle, uint8_t endp
  * @param endpoint_in
  * @param endpoint_out
  */
-static void get_sense(libusb_device_handle *handle, uint8_t endpoint_in, uint8_t endpoint_out) {
+static void get_sense(struct stlink_usb *usb, uint8_t endpoint_in, uint8_t endpoint_out) {
     DLOG("Fetching sense...\n");
     uint8_t cdb[16];
     memset(cdb, 0, sizeof(cdb));
@@ -252,8 +252,8 @@ static void get_sense(libusb_device_handle *handle, uint8_t endpoint_in, uint8_t
 #define REQUEST_SENSE_LENGTH 18
     cdb[0] = REQUEST_SENSE;
     cdb[4] = REQUEST_SENSE_LENGTH;
-    uint32_t tag = send_usb_mass_storage_command(handle, endpoint_out, cdb, sizeof(cdb), 0,
-                                                 LIBUSB_ENDPOINT_IN, REQUEST_SENSE_LENGTH);
+    uint32_t tag = send_usb_mass_storage_command(usb, endpoint_out, cdb, sizeof(cdb), 0,
+                                                 STLINK_USB_EP_IN, REQUEST_SENSE_LENGTH);
 
     if(tag == 0) {
         WLOG("refusing to send request sense with tag 0\n");
@@ -266,15 +266,15 @@ static void get_sense(libusb_device_handle *handle, uint8_t endpoint_in, uint8_t
     int32_t try = 0;
 
     do {
-        ret = libusb_bulk_transfer(handle, endpoint_in, sense, sizeof(sense),
-                                   &transferred, SG_TIMEOUT_MSEC);
+        ret = stlink_usb_read(usb, endpoint_in, sense, sizeof(sense),
+                              SG_TIMEOUT_MSEC, &transferred);
 
-        if(ret == LIBUSB_ERROR_PIPE) { libusb_clear_halt(handle, endpoint_in); }
+        if(stlink_usb_is_stall(usb, ret)) { stlink_usb_clear_halt(usb, endpoint_in); }
 
         try++;
-    } while ((ret == LIBUSB_ERROR_PIPE) && (try < 3));
+    } while (stlink_usb_is_stall(usb, ret) && (try < 3));
 
-    if(ret != LIBUSB_SUCCESS) {
+    if(ret != 0) {
         WLOG("receiving sense failed: %d\n", ret);
         return;
     }
@@ -284,7 +284,7 @@ static void get_sense(libusb_device_handle *handle, uint8_t endpoint_in, uint8_t
     }
 
     uint32_t received_tag;
-    int32_t status = get_usb_mass_storage_status(handle, endpoint_in, &received_tag);
+    int32_t status = get_usb_mass_storage_status(usb, endpoint_in, &received_tag);
 
     if(status != 0) {
         WLOG("receiving sense failed with status: %02x\n", status);
@@ -301,29 +301,29 @@ static void get_sense(libusb_device_handle *handle, uint8_t endpoint_in, uint8_t
 /**
  * Just send a buffer on an endpoint, no questions asked.
  * Handles repeats, and time outs.  Also handles reading status reports and sense
- * @param handle libusb device *
+ * @param usb the USB transport
  * @param endpoint_out sends
  * @param endpoint_in used to read status reports back in
  * @param cbuf  what to send
  * @param length how much to send
  * @return number of bytes actually sent, or -1 for failures.
  */
-int32_t send_usb_data_only(libusb_device_handle *handle, unsigned char endpoint_out,
+int32_t send_usb_data_only(struct stlink_usb *usb, unsigned char endpoint_out,
                        unsigned char endpoint_in, unsigned char *cbuf, uint32_t length) {
     int32_t ret;
     int32_t real_transferred;
     int32_t try = 0;
 
     do {
-        ret = libusb_bulk_transfer(handle, endpoint_out, cbuf, length,
-                                   &real_transferred, SG_TIMEOUT_MSEC);
+        ret = stlink_usb_write(usb, endpoint_out, cbuf, length,
+                               SG_TIMEOUT_MSEC, &real_transferred);
 
-        if(ret == LIBUSB_ERROR_PIPE) { libusb_clear_halt(handle, endpoint_out); }
+        if(stlink_usb_is_stall(usb, ret)) { stlink_usb_clear_halt(usb, endpoint_out); }
 
         try++;
-    } while ((ret == LIBUSB_ERROR_PIPE) && (try < 3));
+    } while (stlink_usb_is_stall(usb, ret) && (try < 3));
 
-    if(ret != LIBUSB_SUCCESS) {
+    if(ret != 0) {
         WLOG("sending failed: %d\n", ret);
         return (-1);
     }
@@ -331,7 +331,7 @@ int32_t send_usb_data_only(libusb_device_handle *handle, unsigned char endpoint_
     // now, swallow up the status, so that things behave nicely...
     uint32_t received_tag;
     // -ve is for my errors, 0 is good, +ve is libusb sense status bytes
-    int32_t status = get_usb_mass_storage_status(handle, endpoint_in, &received_tag);
+    int32_t status = get_usb_mass_storage_status(usb, endpoint_in, &received_tag);
 
     if(status < 0) {
         WLOG("receiving status failed: %d\n", status);
@@ -343,7 +343,7 @@ int32_t send_usb_data_only(libusb_device_handle *handle, unsigned char endpoint_
     }
 
     if(status == 1) {
-        get_sense(handle, endpoint_in, endpoint_out);
+        get_sense(usb, endpoint_in, endpoint_out);
         return (-1);
     }
 
@@ -355,9 +355,9 @@ int32_t stlink_q(stlink_t *sl) {
     // uint8_t cdb_len = 6;  // FIXME varies!!!
     uint8_t cdb_len = 10;  // FIXME varies!!!
     uint8_t lun = 0;  // always zero...
-    uint32_t tag = send_usb_mass_storage_command(sg->usb_handle, sg->ep_req,
+    uint32_t tag = send_usb_mass_storage_command(&sg->usb, (uint8_t) sg->ep_req,
                                                  sg->cdb_cmd_blk, cdb_len, lun,
-                                                 LIBUSB_ENDPOINT_IN, sl->q_len);
+                                                 STLINK_USB_EP_IN, sl->q_len);
 
 
     // now wait for our response...
@@ -369,15 +369,16 @@ int32_t stlink_q(stlink_t *sl) {
 
     if(rx_length > 0) {
         do {
-            ret = libusb_bulk_transfer(sg->usb_handle, sg->ep_rep, sl->q_buf, rx_length,
-                                       &real_transferred, SG_TIMEOUT_MSEC);
+            ret = stlink_usb_read(&sg->usb, (uint8_t) sg->ep_rep, sl->q_buf, (uint32_t) rx_length,
+                                  SG_TIMEOUT_MSEC, &real_transferred);
 
-            if(ret == LIBUSB_ERROR_PIPE) { libusb_clear_halt(sg->usb_handle, sg->ep_req); }
+            /* Clears ep_req after a stall on ep_rep, as it always has. */
+            if(stlink_usb_is_stall(&sg->usb, ret)) { stlink_usb_clear_halt(&sg->usb, (uint8_t) sg->ep_req); }
 
             try++;
-        } while ((ret == LIBUSB_ERROR_PIPE) && (try < 3));
+        } while (stlink_usb_is_stall(&sg->usb, ret) && (try < 3));
 
-        if(ret != LIBUSB_SUCCESS) {
+        if(ret != 0) {
             WLOG("Receiving failed: %d\n", ret);
             return (-1);
         }
@@ -389,7 +390,7 @@ int32_t stlink_q(stlink_t *sl) {
 
     uint32_t received_tag;
     // -ve is for my errors, 0 is good, +ve is libusb sense status bytes
-    int32_t status = get_usb_mass_storage_status(sg->usb_handle, sg->ep_rep, &received_tag);
+    int32_t status = get_usb_mass_storage_status(&sg->usb, (uint8_t) sg->ep_rep, &received_tag);
 
     if(status < 0) {
         WLOG("receiving status failed: %d\n", status);
@@ -401,7 +402,7 @@ int32_t stlink_q(stlink_t *sl) {
     }
 
     if(status == 1) {
-        get_sense(sg->usb_handle, sg->ep_rep, sg->ep_req);
+        get_sense(&sg->usb, (uint8_t) sg->ep_rep, (uint8_t) sg->ep_req);
         return (-1);
     }
 
@@ -835,13 +836,13 @@ int32_t _stlink_sg_write_mem8(stlink_t *sl, uint32_t addr, uint16_t len) {
     write_uint16(sg->cdb_cmd_blk + 6, len);
 
     // this sends the command...
-    ret = send_usb_mass_storage_command(sg->usb_handle,
+    ret = send_usb_mass_storage_command(&sg->usb,
                                         sg->ep_req, sg->cdb_cmd_blk, CDB_SL, 0, 0, 0);
 
     if(ret == -1) { return (ret); }
 
     // This sends the data...
-    ret = send_usb_data_only(sg->usb_handle,
+    ret = send_usb_data_only(&sg->usb,
                              sg->ep_req, sg->ep_rep, sl->q_buf, len);
 
     if(ret == -1) { return (ret); }
@@ -863,13 +864,13 @@ int32_t _stlink_sg_write_mem32(stlink_t *sl, uint32_t addr, uint16_t len) {
     write_uint16(sg->cdb_cmd_blk + 6, len);
 
     // this sends the command...
-    ret = send_usb_mass_storage_command(sg->usb_handle,
+    ret = send_usb_mass_storage_command(&sg->usb,
                                         sg->ep_req, sg->cdb_cmd_blk, CDB_SL, 0, 0, 0);
 
     if(ret == -1) { return (ret); }
 
     // This sends the data...
-    ret = send_usb_data_only(sg->usb_handle,
+    ret = send_usb_data_only(&sg->usb,
                              sg->ep_req, sg->ep_rep, sl->q_buf, len);
 
     if(ret == -1) { return (ret); }
@@ -974,88 +975,41 @@ static stlink_t* stlink_open(const int32_t verbose) {
 
     memset(sl, 0, sizeof(stlink_t));
 
-    if(libusb_init(&(slsg->libusb_ctx))) {
-        WLOG("failed to init libusb context, wrong version of libraries?\n");
+    if(stlink_usb_init(&slsg->usb, verbose)) {
+        WLOG("failed to init the USB transport\n");
         free(sl);
         free(slsg);
         return (NULL);
     }
 
-#if LIBUSB_API_VERSION < 0x01000106
-    libusb_set_debug(slsg->libusb_ctx, ugly_libusb_log_level(verbose));
-#else
-    libusb_set_option(slsg->libusb_ctx, LIBUSB_OPTION_LOG_LEVEL, ugly_libusb_log_level(verbose));
-#endif
+    /* Detaching a kernel driver, checking the configuration and claiming the
+     * interface all happen inside the transport's open(), so what is left here
+     * is picking the V1 out of whatever is attached. */
+    struct stlink_usb_device *devices = NULL;
+    int32_t count = stlink_usb_enumerate(&slsg->usb, &devices);
+    const struct stlink_usb_device *chosen = NULL;
 
-    slsg->usb_handle = libusb_open_device_with_vid_pid(slsg->libusb_ctx, STLINK_USB_VID_ST, STLINK_USB_PID_STLINK);
+    for(int32_t i = 0; i < count; i++) {
+        if(devices[i].pid == STLINK_USB_PID_STLINK) {
+            chosen = &devices[i];
+            break;
+        }
+    }
 
-    if(slsg->usb_handle == NULL) {
+    if(chosen == NULL || stlink_usb_open(&slsg->usb, chosen) != 0) {
         WLOG("Failed to find an stlink v1 by VID:PID\n");
-        libusb_close(slsg->usb_handle);
-        libusb_exit(slsg->libusb_ctx);
+        stlink_usb_release(&slsg->usb, devices, count);
+        stlink_usb_exit(&slsg->usb);
         free(sl);
         free(slsg);
         return (NULL);
     }
 
-    // TODO: Could read the interface config descriptor, and assert lots of the assumptions
-    // assumption: numInterfaces is always 1...
-    if(libusb_kernel_driver_active(slsg->usb_handle, 0) == 1) {
-        int32_t r = libusb_detach_kernel_driver(slsg->usb_handle, 0);
-
-        if(r < 0) {
-            WLOG("libusb_detach_kernel_driver(() error %s\n", strerror(-r));
-            libusb_close(slsg->usb_handle);
-            libusb_exit(slsg->libusb_ctx);
-            free(sl);
-            free(slsg);
-            return (NULL);
-        }
-
-        DLOG("Kernel driver was successfully detached\n");
-    }
-
-    int32_t config;
-
-    if(libusb_get_configuration(slsg->usb_handle, &config)) {
-        /* this may fail for a previous configured device */
-        WLOG("libusb_get_configuration()\n");
-        libusb_close(slsg->usb_handle);
-        libusb_exit(slsg->libusb_ctx);
-        free(sl);
-        free(slsg);
-        return (NULL);
-
-    }
-
-    // assumption: bConfigurationValue is always 1
-    if(config != 1) {
-        WLOG("Your stlink got into a real weird configuration, trying to fix it!\n");
-        DLOG("setting new configuration (%d -> 1)\n", config);
-
-        if(libusb_set_configuration(slsg->usb_handle, 1)) {
-            /* this may fail for a previous configured device */
-            WLOG("libusb_set_configuration() failed\n");
-            libusb_close(slsg->usb_handle);
-            libusb_exit(slsg->libusb_ctx);
-            free(sl);
-            free(slsg);
-            return (NULL);
-        }
-    }
-
-    if(libusb_claim_interface(slsg->usb_handle, 0)) {
-        WLOG("libusb_claim_interface() failed\n");
-        libusb_close(slsg->usb_handle);
-        libusb_exit(slsg->libusb_ctx);
-        free(sl);
-        free(slsg);
-        return (NULL);
-    }
+    stlink_usb_release(&slsg->usb, devices, count);
 
     // assumption: endpoint config is fixed mang. really.
-    slsg->ep_rep = 1 /* ep rep */ | LIBUSB_ENDPOINT_IN;
-    slsg->ep_req = 2 /* ep req */ | LIBUSB_ENDPOINT_OUT;
+    slsg->ep_rep = 1 /* ep rep */ | STLINK_USB_EP_IN;
+    slsg->ep_req = 2 /* ep req */ | STLINK_USB_EP_OUT;
 
     DLOG("Successfully opened stlinkv1 by libusb :)\n");
 
