@@ -252,6 +252,16 @@ static int32_t libusb_backend_read(struct stlink_usb *usb, uint8_t ep, uint8_t *
     return (libusb_backend_transfer(usb, ep, buf, len, timeout_ms, transferred));
 }
 
+static int32_t libusb_backend_clear_halt(struct stlink_usb *usb, uint8_t ep) {
+    struct libusb_priv *priv = usb->backend_data;
+
+    return (libusb_clear_halt(priv->handle, ep));
+}
+
+static bool libusb_backend_is_stall(int32_t error) {
+    return (error == LIBUSB_ERROR_PIPE);
+}
+
 static const char *libusb_backend_error_name(int32_t error, char *buf, uint32_t len) {
     /* libusb's names are string constants, so the caller's buffer is unused. */
     (void)buf;
@@ -271,6 +281,8 @@ static const struct stlink_usb_backend _libusb_backend = {
     .close      = libusb_backend_close,
     .bulk_write = libusb_backend_write,
     .bulk_read  = libusb_backend_read,
+    .clear_halt = libusb_backend_clear_halt,
+    .is_stall   = libusb_backend_is_stall,
     .error_name = libusb_backend_error_name,
 };
 

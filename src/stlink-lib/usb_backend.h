@@ -7,6 +7,7 @@
 #ifndef USB_BACKEND_H
 #define USB_BACKEND_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include <stlink_serial.h>
@@ -124,6 +125,16 @@ struct stlink_usb_backend {
                          uint32_t len, uint32_t timeout_ms, int32_t *transferred);
 
     /*
+     * Clear a stalled endpoint so that transfers on it can resume, and say
+     * whether an error meant the endpoint stalled in the first place. The
+     * second one is a predicate rather than a normalised error code because
+     * only the backend knows what its own codes mean, and the V1 SCSI path is
+     * the only caller that needs to tell a stall apart from anything else.
+     */
+    int32_t (*clear_halt)(struct stlink_usb *usb, uint8_t ep);
+    bool (*is_stall)(int32_t error);
+
+    /*
      * Name an error this backend returned. The caller supplies the buffer,
      * because probing opens several devices on several threads and a shared
      * static one would race. A backend whose strings are compile time
@@ -188,6 +199,14 @@ static inline int32_t stlink_usb_write(struct stlink_usb *usb, uint8_t ep, uint8
 static inline int32_t stlink_usb_read(struct stlink_usb *usb, uint8_t ep, uint8_t *buf,
                                       uint32_t len, uint32_t timeout_ms, int32_t *transferred) {
     return (usb->backend->bulk_read(usb, ep, buf, len, timeout_ms, transferred));
+}
+
+static inline int32_t stlink_usb_clear_halt(struct stlink_usb *usb, uint8_t ep) {
+    return (usb->backend->clear_halt(usb, ep));
+}
+
+static inline bool stlink_usb_is_stall(struct stlink_usb *usb, int32_t error) {
+    return (usb->backend->is_stall(error));
 }
 
 static inline const char *stlink_usb_error_name(struct stlink_usb *usb, int32_t error,
