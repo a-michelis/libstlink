@@ -57,6 +57,50 @@ uint32_t stlink_serial(struct libusb_device_handle *handle, struct libusb_device
     return (uint32_t)strlen(serial);
 }
 
+/*
+ *  Log message levels.
+ *  - LIBUSB_LOG_LEVEL_NONE (0)    : no messages ever printed by the library
+ * (default)
+ *  - LIBUSB_LOG_LEVEL_ERROR (1)   : error messages are printed to stderr
+ *  - LIBUSB_LOG_LEVEL_WARNING (2) : warning and error messages are printed to
+ * stderr
+ *  - LIBUSB_LOG_LEVEL_INFO (3)    : informational messages are printed to
+ * stderr
+ *  - LIBUSB_LOG_LEVEL_DEBUG (4)   : debug and informational messages are
+ * printed to stderr
+ */
+static int32_t libusb_log_level(enum ugly_loglevel v) {
+#ifdef __FreeBSD__
+  // FreeBSD includes its own reimplementation of libusb.
+  // Its libusb_set_debug() function expects a lib_debug_level
+  // instead of a lib_log_level and is verbose enough to drown out
+  // all other output.
+  switch (v) {
+  case UDEBUG:
+    return (3); // LIBUSB_DEBUG_FUNCTION + LIBUSB_DEBUG_TRANSFER
+  case UINFO:
+    return (1); // LIBUSB_DEBUG_FUNCTION only
+  case UWARN:
+    return (0); // LIBUSB_DEBUG_NO
+  case UERROR:
+    return (0); // LIBUSB_DEBUG_NO
+  }
+  return (0);
+#else
+  switch (v) {
+  case UDEBUG:
+    return (4);
+  case UINFO:
+    return (3);
+  case UWARN:
+    return (2);
+  case UERROR:
+    return (1);
+  }
+  return (2);
+#endif
+}
+
 static int32_t libusb_backend_init(struct stlink_usb *usb, enum ugly_loglevel verbose) {
     struct libusb_priv *priv = calloc(1, sizeof(struct libusb_priv));
     if(priv == NULL) { return (-1); }
@@ -68,9 +112,9 @@ static int32_t libusb_backend_init(struct stlink_usb *usb, enum ugly_loglevel ve
     }
 
 #if LIBUSB_API_VERSION < 0x01000106
-    libusb_set_debug(priv->ctx, ugly_libusb_log_level(verbose));
+    libusb_set_debug(priv->ctx, libusb_log_level(verbose));
 #else
-    libusb_set_option(priv->ctx, LIBUSB_OPTION_LOG_LEVEL, ugly_libusb_log_level(verbose));
+    libusb_set_option(priv->ctx, LIBUSB_OPTION_LOG_LEVEL, libusb_log_level(verbose));
 #endif
 
     usb->backend_data = priv;
