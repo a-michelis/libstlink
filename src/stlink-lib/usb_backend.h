@@ -155,6 +155,14 @@ struct stlink_usb {
 /* The transport compiled in for this platform. */
 const struct stlink_usb_backend *stlink_usb_backend_get(void);
 
+/*
+ * Write the serial a raw USB string descriptor carries, as read_serial() needs
+ * whichever transport fetched the descriptor. Returns the length written, or
+ * (0) if the descriptor was not one an ST-LINK produces, leaving serial empty.
+ * serial must hold STLINK_SERIAL_BUFFER_SIZE bytes.
+ */
+uint32_t stlink_usb_serial_from_descriptor(const uint8_t *desc, uint32_t len, char *serial);
+
 
 /* Dispatchers, so that call sites read as operations rather than lookups. */
 
