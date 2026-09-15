@@ -39,6 +39,7 @@
 
 #include "libusb_settings.h"
 #include "logging.h"
+#include "usb_backend.h"
 
 
 #define STLINK_USB_VID_ST                   0x0483
@@ -80,8 +81,7 @@
 enum SCSI_Generic_Direction {SG_DXFER_TO_DEV = 0, SG_DXFER_FROM_DEV = 0x80};
 
 struct stlink_libusb {
-    libusb_context* libusb_ctx;
-    libusb_device_handle* usb_handle;
+    struct stlink_usb usb;      // the transport, see usb_backend.h
     uint32_t ep_req;
     uint32_t ep_rep;
     uint32_t ep_trace;

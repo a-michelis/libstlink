@@ -73,8 +73,8 @@ void _stlink_usb_close(stlink_t* sl) {
 
     // maybe we couldn't even get the usb device?
     if(handle != NULL) {
-        if(handle->usb_handle != NULL) { libusb_close(handle->usb_handle); }
-        libusb_exit(handle->libusb_ctx);
+        stlink_usb_close(&handle->usb);
+        stlink_usb_exit(&handle->usb);
         free(handle);
     }
 }
@@ -83,23 +83,24 @@ ssize_t send_recv(struct stlink_libusb* handle, int32_t terminate, unsigned char
                     unsigned char* rxbuf, uint32_t rxsize, int32_t check_error, const char *cmd) {
     // Note: txbuf and rxbuf can point to the same area
     int32_t res, t, retry = 0;
+    char errbuf[STLINK_USB_ERROR_NAME_SIZE];
 
     while (1) {
         res = 0;
-        t = libusb_bulk_transfer(handle->usb_handle, handle->ep_req, txbuf, (int32_t) txsize, &res, 3000);
+        t = stlink_usb_write(&handle->usb, (uint8_t) handle->ep_req, txbuf, txsize, 3000, &res);
 
         if(t) {
-            ELOG("%s send request failed: %s\n", cmd, libusb_error_name(t));
+            ELOG("%s send request failed: %s\n", cmd, stlink_usb_error_name(&handle->usb, t, errbuf, sizeof(errbuf)));
             return (-1);
         } else if((size_t) res != txsize) {
             ELOG("%s send request wrote %u bytes, instead of %u\n", cmd, (uint32_t) res, (uint32_t) txsize);
         }
 
         if(rxsize != 0) {
-            t = libusb_bulk_transfer(handle->usb_handle, handle->ep_rep, rxbuf, (int32_t) rxsize, &res, 3000);
+            t = stlink_usb_read(&handle->usb, (uint8_t) handle->ep_rep, rxbuf, rxsize, 3000, &res);
 
             if(t) {
-                ELOG("%s read reply failed: %s\n", cmd, libusb_error_name(t));
+                ELOG("%s read reply failed: %s\n", cmd, stlink_usb_error_name(&handle->usb, t, errbuf, sizeof(errbuf)));
                 return (-1);
             }
 
@@ -140,10 +141,10 @@ ssize_t send_recv(struct stlink_libusb* handle, int32_t terminate, unsigned char
         if((handle->protocol == 1) && terminate) {
             // read the SG reply
             unsigned char sg_buf[13];
-            t = libusb_bulk_transfer(handle->usb_handle, handle->ep_rep, sg_buf, 13, &res, 3000);
+            t = stlink_usb_read(&handle->usb, (uint8_t) handle->ep_rep, sg_buf, 13, 3000, &res);
 
             if(t) {
-                ELOG("%s read storage failed: %s\n", cmd, libusb_error_name(t));
+                ELOG("%s read storage failed: %s\n", cmd, stlink_usb_error_name(&handle->usb, t, errbuf, sizeof(errbuf)));
                 return (-1);
             }
 
@@ -1086,7 +1087,7 @@ int32_t _stlink_usb_read_trace(stlink_t* sl, uint8_t* buf, uint32_t size) {
 
     if(trace_count != 0) {
         int32_t res = 0;
-        int32_t t = libusb_bulk_transfer(slu->usb_handle, slu->ep_trace, buf, trace_count, &res, 3000);
+        int32_t t = stlink_usb_read(&slu->usb, (uint8_t) slu->ep_trace, buf, trace_count, 3000, &res);
 
         if(t || res != (int32_t) trace_count) {
             ELOG("read_trace read error %d\n", t);
@@ -1158,7 +1159,7 @@ stlink_t *stlink_open_usb(enum ugly_loglevel verbose, enum connect_type connect,
     stlink_t* sl = NULL;
     struct stlink_libusb* slu = NULL;
     int32_t ret = -1;
-    int32_t config;
+    uint16_t pid = 0;
 
     sl = calloc(1, sizeof(stlink_t));
     if(sl == NULL) { goto on_malloc_error; }
@@ -1172,123 +1173,76 @@ stlink_t *stlink_open_usb(enum ugly_loglevel verbose, enum connect_type connect,
 
     sl->core_stat = TARGET_UNKNOWN;
 
-    if(libusb_init(&(slu->libusb_ctx))) {
-        WLOG("failed to init libusb context, wrong version of libraries?\n");
+    if(stlink_usb_init(&slu->usb, verbose)) {
+        WLOG("failed to init the USB transport\n");
         goto on_error;
     }
 
-#if LIBUSB_API_VERSION < 0x01000106
-    libusb_set_debug(slu->libusb_ctx, ugly_libusb_log_level(verbose));
-#else
-    libusb_set_option(slu->libusb_ctx, LIBUSB_OPTION_LOG_LEVEL, ugly_libusb_log_level(verbose));
-#endif
+    struct stlink_usb_device *devices = NULL;
+    int32_t count = stlink_usb_enumerate(&slu->usb, &devices);
+    const struct stlink_usb_device *chosen = NULL;
 
-    libusb_device **list = NULL;
-    ssize_t cnt = libusb_get_device_list(slu->libusb_ctx, &list);
-    struct libusb_device_descriptor desc;
-
-    while (cnt-- > 0) {
-        struct libusb_device_handle *handle;
-
-        libusb_get_device_descriptor(list[cnt], &desc);
-
-        if(desc.idVendor != STLINK_USB_VID_ST) { continue; }
-
-        ret = libusb_open(list[cnt], &handle);
-
-        if(ret) { continue; } // could not open device
-
-        uint64_t serial_len = stlink_serial(handle, &desc, sl->serial);
-
-        libusb_close(handle);
-
-        if(serial_len != STLINK_SERIAL_LENGTH) { continue; } // could not read the serial
+    /* Read one serial at a time and stop at the first match, so that a probe
+     * looking for one device does not disturb the others. */
+    for(int32_t i = 0; i < count; i++) {
+        if(stlink_usb_read_serial(&slu->usb, &devices[i]) != 0) { continue; }
+        if(strlen(devices[i].serial) != STLINK_SERIAL_LENGTH) { continue; } // could not read the serial
 
         // if no serial provided, or if serial match device, fixup version and protocol
-        if(((serial == NULL) || (*serial == 0)) || (memcmp(serial, &sl->serial, STLINK_SERIAL_LENGTH) == 0)) {
-            if(STLINK_V1_USB_PID(desc.idProduct)) {
+        if(((serial == NULL) || (*serial == 0)) || (memcmp(serial, devices[i].serial, STLINK_SERIAL_LENGTH) == 0)) {
+            memcpy(sl->serial, devices[i].serial, STLINK_SERIAL_BUFFER_SIZE);
+
+            if(STLINK_V1_USB_PID(devices[i].pid)) {
                 slu->protocol = 1;
                 sl->version.stlink_v = 1;
-            } else if(STLINK_V2_USB_PID(desc.idProduct) || STLINK_V2_1_USB_PID(desc.idProduct)) {
+            } else if(STLINK_V2_USB_PID(devices[i].pid) || STLINK_V2_1_USB_PID(devices[i].pid)) {
                 sl->version.stlink_v = 2;
-            } else if(STLINK_V3_USB_PID(desc.idProduct)) {
+            } else if(STLINK_V3_USB_PID(devices[i].pid)) {
                 sl->version.stlink_v = 3;
             }
 
+            chosen = &devices[i];
             break;
         }
     }
 
-    if(cnt < 0) {
+    if(chosen == NULL) {
         WLOG ("Couldn't find any ST-Link devices\n");
-        libusb_free_device_list(list, 1);
+        stlink_usb_release(&slu->usb, devices, count);
         goto on_error;
-    } else {
-        ret = libusb_open(list[cnt], &slu->usb_handle);
-
-        if(ret != 0) {
-            WLOG("Error %d (%s) opening ST-Link v%d device %03d:%03d\n", ret,
-                 strerror(errno),
-                 sl->version.stlink_v,
-                 libusb_get_bus_number(list[cnt]),
-                 libusb_get_device_address(list[cnt]));
-            libusb_free_device_list(list, 1);
-            goto on_error;
-        }
     }
 
-    libusb_free_device_list(list, 1);
+    /* Copied out before release(), which invalidates the array while the
+     * connection itself stays live. */
+    pid = chosen->pid;
+    char location[sizeof(chosen->location)];
+    memcpy(location, chosen->location, sizeof(location));
 
-// libusb_kernel_driver_active is not available on Windows.
-#if !defined(_WIN32)
-    if(libusb_kernel_driver_active(slu->usb_handle, 0) == 1) {
-        ret = libusb_detach_kernel_driver(slu->usb_handle, 0);
+    ret = stlink_usb_open(&slu->usb, chosen);
+    stlink_usb_release(&slu->usb, devices, count);
 
-        if(ret < 0) {
-            WLOG("libusb_detach_kernel_driver(() error %s\n", strerror(-ret));
-            goto on_libusb_error;
-        }
-    }
-#endif // NOT _WIN32
-
-    if(libusb_get_configuration(slu->usb_handle, &config)) {
-        // this may fail for a previous configured device
-        WLOG("libusb_get_configuration()\n");
-        goto on_libusb_error;
-    }
-
-    if(config != 1) {
-        printf("setting new configuration (%d -> 1)\n", config);
-
-        if(libusb_set_configuration(slu->usb_handle, 1)) {
-            // this may fail for a previous configured device
-            WLOG("libusb_set_configuration() failed\n");
-            goto on_libusb_error;
-        }
-    }
-
-    if(libusb_claim_interface(slu->usb_handle, 0)) {
-        WLOG("Stlink usb device found, but unable to claim (probably already in use?)\n");
-        goto on_libusb_error;
+    if(ret != 0) {
+        WLOG("Error %d opening ST-Link v%d device %s\n", ret, sl->version.stlink_v, location);
+        goto on_error;
     }
 
     // TODO: Could use the scanning technique from STM8 code here...
-    slu->ep_rep = 1 /* ep rep */ | LIBUSB_ENDPOINT_IN;
+    slu->ep_rep = 1 /* ep rep */ | STLINK_USB_EP_IN;
 
-    if(desc.idProduct == STLINK_USB_PID_STLINK_NUCLEO ||
-        desc.idProduct == STLINK_USB_PID_STLINK_32L_AUDIO ||
-        desc.idProduct == STLINK_USB_PID_STLINK_V2_1 ||
-        desc.idProduct == STLINK_USB_PID_STLINK_V3_USBLOADER ||
-        desc.idProduct == STLINK_USB_PID_STLINK_V3E_PID ||
-        desc.idProduct == STLINK_USB_PID_STLINK_V3S_PID ||
-        desc.idProduct == STLINK_USB_PID_STLINK_V3_2VCP_PID ||
-        desc.idProduct == STLINK_USB_PID_STLINK_V3_NO_MSD_PID ||
-        desc.idProduct == STLINK_USB_PID_STLINK_V3P) {
-        slu->ep_req = 1 /* ep req */ | LIBUSB_ENDPOINT_OUT;
-        slu->ep_trace = 2 | LIBUSB_ENDPOINT_IN;
+    if(pid == STLINK_USB_PID_STLINK_NUCLEO ||
+        pid == STLINK_USB_PID_STLINK_32L_AUDIO ||
+        pid == STLINK_USB_PID_STLINK_V2_1 ||
+        pid == STLINK_USB_PID_STLINK_V3_USBLOADER ||
+        pid == STLINK_USB_PID_STLINK_V3E_PID ||
+        pid == STLINK_USB_PID_STLINK_V3S_PID ||
+        pid == STLINK_USB_PID_STLINK_V3_2VCP_PID ||
+        pid == STLINK_USB_PID_STLINK_V3_NO_MSD_PID ||
+        pid == STLINK_USB_PID_STLINK_V3P) {
+        slu->ep_req = 1 /* ep req */ | STLINK_USB_EP_OUT;
+        slu->ep_trace = 2 | STLINK_USB_EP_IN;
     } else {
-        slu->ep_req = 2 /* ep req */ | LIBUSB_ENDPOINT_OUT;
-        slu->ep_trace = 3 | LIBUSB_ENDPOINT_IN;
+        slu->ep_req = 2 /* ep req */ | STLINK_USB_EP_OUT;
+        slu->ep_trace = 3 | STLINK_USB_EP_IN;
     }
 
     slu->sg_transfer_idx = 0;
@@ -1325,12 +1279,8 @@ stlink_t *stlink_open_usb(enum ugly_loglevel verbose, enum connect_type connect,
     stlink_target_connect(sl, connect);
     return (sl);
 
-on_libusb_error:
-    stlink_close(sl);
-    return (NULL);
-
 on_error:
-    if(slu->libusb_ctx) { libusb_exit(slu->libusb_ctx); }
+    stlink_usb_exit(&slu->usb);
 
 on_malloc_error:
     if(sl != NULL) { free(sl); }
@@ -1339,27 +1289,16 @@ on_malloc_error:
     return (NULL);
 }
 
-static uint32_t stlink_probe_usb_devs(libusb_device **devs, stlink_t **sldevs[], enum connect_type connect, int32_t freq) {
+static uint32_t stlink_probe_usb_devs(struct stlink_usb *usb, struct stlink_usb_device *devices, int32_t count,
+                                      stlink_t **sldevs[], enum connect_type connect, int32_t freq) {
     stlink_t **_sldevs;
-    libusb_device *dev;
-    int32_t i = 0;
     uint32_t slcnt = 0;
     uint32_t slcur = 0;
 
     /* Count STLINKs */
-    while ((dev = devs[i++]) != NULL) {
-        struct libusb_device_descriptor desc;
-        int32_t ret = libusb_get_device_descriptor(dev, &desc);
-
-        if(ret < 0) {
-            WLOG("failed to get libusb device descriptor (libusb error: %d)\n", ret);
-            break;
-        }
-
-        if(desc.idVendor != STLINK_USB_VID_ST) { continue; }
-
-        if(!STLINK_SUPPORTED_USB_PID(desc.idProduct)) {
-            WLOG("skipping ST device : %#04x:%#04x)\n", desc.idVendor, desc.idProduct);
+    for(int32_t i = 0; i < count; i++) {
+        if(!STLINK_SUPPORTED_USB_PID(devices[i].pid)) {
+            WLOG("skipping ST device : %#04x:%#04x)\n", devices[i].vid, devices[i].pid);
             continue;
         }
 
@@ -1385,44 +1324,22 @@ static uint32_t stlink_probe_usb_devs(libusb_device **devs, stlink_t **sldevs[],
         return 0;
     }
 
-    i = 0;
     uint32_t job_idx = 0;
 
-    while ((dev = devs[i++]) != NULL) {
-        struct libusb_device_descriptor desc;
-        int32_t ret = libusb_get_device_descriptor(dev, &desc);
+    for(int32_t i = 0; i < count; i++) {
+        if(!STLINK_SUPPORTED_USB_PID(devices[i].pid)) { continue; }
 
-        if(ret < 0) {
-            WLOG("failed to get libusb device descriptor (libusb error: %d)\n", ret);
-            break;
-        }
+        int32_t ret = stlink_usb_read_serial(usb, &devices[i]);
 
-        if(desc.idVendor != STLINK_USB_VID_ST) { continue; }
-        if(!STLINK_SUPPORTED_USB_PID(desc.idProduct)) { continue; }
-
-        struct libusb_device_handle* handle;
-        char serial[STLINK_SERIAL_BUFFER_SIZE] = {0, };
-
-        ret = libusb_open(dev, &handle);
-
-        if(ret < 0) {
-            if(ret == LIBUSB_ERROR_ACCESS) {
-                ELOG("Could not open USB device %#06x:%#06x, access error.\n", desc.idVendor, desc.idProduct);
-            } else {
-                ELOG("Failed to open USB device %#06x:%#06x, libusb error: %d)\n", desc.idVendor, desc.idProduct, ret);
-            }
-
+        if(ret != 0) {
+            ELOG("Could not open USB device %#06x:%#06x (error %d)\n", devices[i].vid, devices[i].pid, ret);
             continue;
         }
 
-        uint64_t serial_len = stlink_serial(handle, &desc, serial);
-
-        libusb_close(handle);
-
-        if(serial_len != STLINK_SERIAL_LENGTH) { continue; }
+        if(strlen(devices[i].serial) != STLINK_SERIAL_LENGTH) { continue; }
 
         /* prepare thread args */
-        snprintf(args[job_idx].serial, STLINK_SERIAL_BUFFER_SIZE, "%s", serial);
+        snprintf(args[job_idx].serial, STLINK_SERIAL_BUFFER_SIZE, "%s", devices[i].serial);
         args[job_idx].connect = connect;
         args[job_idx].freq = freq;
         args[job_idx].res = NULL;
@@ -1457,25 +1374,31 @@ static uint32_t stlink_probe_usb_devs(libusb_device **devs, stlink_t **sldevs[],
 }
 
 uint32_t stlink_probe_usb(stlink_t **stdevs[], enum connect_type connect, int32_t freq) {
-    libusb_device **devs;
+    struct stlink_usb usb = {0, };
+    struct stlink_usb_device *devices = NULL;
     stlink_t **sldevs;
 
     uint32_t slcnt = 0;
-    int32_t r;
-    ssize_t cnt;
 
-    r = libusb_init(NULL);
+    *stdevs = NULL;
 
-    if(r < 0) { return (0); }
+    if(stlink_usb_init(&usb, UERROR)) {
+        stlink_usb_exit(&usb);
+        return (0);
+    }
 
-    cnt = libusb_get_device_list(NULL, &devs);
+    int32_t count = stlink_usb_enumerate(&usb, &devices);
 
-    if(cnt < 0) { return (0); }
+    if(count < 0) {
+        stlink_usb_release(&usb, devices, count);
+        stlink_usb_exit(&usb);
+        return (0);
+    }
 
-    slcnt = stlink_probe_usb_devs(devs, &sldevs, connect, freq);
-    libusb_free_device_list(devs, 1);
+    slcnt = stlink_probe_usb_devs(&usb, devices, count, &sldevs, connect, freq);
 
-    libusb_exit(NULL);
+    stlink_usb_release(&usb, devices, count);
+    stlink_usb_exit(&usb);
 
     *stdevs = sldevs;
 
