@@ -48,6 +48,17 @@ endif()
 
 # ====================================================================================================
 
+### Threading implementation
+# One header, one implementation per platform, selected here rather than with
+# preprocessor branches inside a single file.
+
+if (WIN32)
+    list(APPEND STLINK_SOURCES src/stlink-env/win32/stlink_thread.c)
+else ()
+    list(APPEND STLINK_SOURCES src/stlink-env/posix/stlink_thread.c)
+endif()
+
+
 ### libusb
 
 find_package(libusb REQUIRED)

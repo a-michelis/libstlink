@@ -90,11 +90,15 @@ cmake_host_system_information(RESULT OS_NAME QUERY OS_NAME)
 message(STATUS "Checking for OS_NAME: ${OS_NAME}")
 
 # Threading support
-# pthreads on Unix, winpthread on WIN32, MSVC & MINGW
-if (MSVC)
-    # FindThreads accepts native Win32 threads, but usb.c uses the pthread API.
-    find_package(PThreads4W REQUIRED)
-    set(STLINK_THREAD_LIBRARY PThreads4W::PThreads4W)
+# pthreads on Unix; on Windows the Win32 API is used directly, so that neither
+# PThreads4W (MSVC) nor winpthread (MinGW) has to be found, linked or shipped.
+if (WIN32)
+    # Nothing to link here: _beginthreadex comes from the CRT, and
+    # WaitForSingleObject and CloseHandle from kernel32, both of which MSVC and
+    # MinGW link by default. Deliberately no find_package(Threads): with
+    # THREADS_PREFER_PTHREAD_FLAG it would pick winpthread on MinGW and add
+    # -pthread, restoring the libwinpthread-1.dll dependency.
+    set(STLINK_THREAD_LIBRARY "")
 else ()
     set(THREADS_PREFER_PTHREAD_FLAG ON)
     find_package(Threads REQUIRED)
