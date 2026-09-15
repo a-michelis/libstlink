@@ -21,7 +21,7 @@ struct libusb_priv {
 };
 
 /* return the length of serial or (0) in case of errors */
-uint32_t stlink_serial(struct libusb_device_handle *handle, struct libusb_device_descriptor *desc, char *serial) {
+static uint32_t stlink_serial(struct libusb_device_handle *handle, struct libusb_device_descriptor *desc, char *serial) {
     unsigned char desc_serial[(STLINK_SERIAL_LENGTH) * 2];
 
     /* truncate the string in the serial buffer */

@@ -37,7 +37,6 @@
 #include <stlink_cmd.h>
 #include <stm32_register.h>
 
-#include "libusb_settings.h"
 #include "logging.h"
 #include "usb_backend.h"
 
@@ -132,7 +131,6 @@ int32_t _stlink_usb_read_trace(stlink_t* sl, uint8_t* buf, uint32_t size);
 
 // static stlink_backend_t _stlink_usb_backend = { };
 
-uint32_t stlink_serial(struct libusb_device_handle *handle, struct libusb_device_descriptor *desc, char *serial);
 stlink_t *stlink_open_usb(enum ugly_loglevel verbose, enum connect_type connect, char serial[STLINK_SERIAL_BUFFER_SIZE], int32_t freq);
 // static uint32_t stlink_probe_usb_devs(libusb_device **devs, stlink_t **sldevs[], enum connect_type connect, int32_t freq);
 uint32_t stlink_probe_usb(stlink_t **stdevs[], enum connect_type connect, int32_t freq);
