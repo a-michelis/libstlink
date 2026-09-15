@@ -179,7 +179,9 @@ if (MSVC)
     # libusb_settings.h and unistd.h (both installed above) include these,
     # so downstream consumers of stlink-static.lib need them too - v1.8.0
     # shipped them, the vcpkg switch stopped bundling them (issue #2).
-    install(FILES "${LIBUSB_INCLUDE_DIR}/libusb.h" DESTINATION "${STLINK_INCLUDE_PATH}/libusb-1.0")
+    if (STLINK_USB_BACKEND STREQUAL "libusb")
+        install(FILES "${LIBUSB_INCLUDE_DIR}/libusb.h" DESTINATION "${STLINK_INCLUDE_PATH}/libusb-1.0")
+    endif()
     install(FILES src/stlink-env/getopt/getopt.h DESTINATION ${STLINK_INCLUDE_PATH})
 endif()
 

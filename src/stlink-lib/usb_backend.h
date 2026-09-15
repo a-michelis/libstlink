@@ -50,7 +50,7 @@ struct stlink_usb_device {
     uint16_t vid;
     uint16_t pid;
     /* Free form and for diagnostics only: a bus:address pair, or a port. */
-    char location[16];
+    char location[32];
     char serial[STLINK_SERIAL_BUFFER_SIZE];
     void *priv;
 };

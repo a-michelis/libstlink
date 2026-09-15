@@ -66,16 +66,26 @@ endif()
 # library. Selecting it also decides which libraries have to be found.
 
 set(STLINK_USB_BACKEND "libusb" CACHE STRING "USB transport implementation to build")
-set_property(CACHE STLINK_USB_BACKEND PROPERTY STRINGS libusb)
+set_property(CACHE STLINK_USB_BACKEND PROPERTY STRINGS libusb winusb)
 
 # Every implementation there is, so that the ones not picked can be kept out of
 # the library sources.
-set(STLINK_USB_BACKEND_SOURCES_ALL usb_libusb.c)
+set(STLINK_USB_BACKEND_SOURCES_ALL usb_libusb.c usb_winusb.c)
 
 if (STLINK_USB_BACKEND STREQUAL "libusb")
     find_package(libusb REQUIRED)
     set(STLINK_USB_BACKEND_SOURCE usb_libusb.c)
     set(STLINK_USB_BACKEND_LIBRARIES libusb::libusb)
+elseif (STLINK_USB_BACKEND STREQUAL "winusb")
+    if (NOT WIN32)
+        message(FATAL_ERROR "STLINK_USB_BACKEND=winusb is only available on Windows")
+    endif()
+
+    # Both ship with the Windows SDK and with mingw-w64, so there is nothing to
+    # find and nothing to bundle: winusb.dll and setupapi.dll are part of the
+    # system. This is the point of the backend.
+    set(STLINK_USB_BACKEND_SOURCE usb_winusb.c)
+    set(STLINK_USB_BACKEND_LIBRARIES winusb setupapi)
 else ()
     message(FATAL_ERROR "Unknown STLINK_USB_BACKEND '${STLINK_USB_BACKEND}'")
 endif()
