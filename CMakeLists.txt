@@ -151,6 +151,7 @@ configure_file("${PROJECT_SOURCE_DIR}/inc/version.h.in"
 # Define source- and headerfiles for stlink library
 file(GLOB STLINK_LIB_HEADERS
     "${CMAKE_SOURCE_DIR}/inc/*.h"
+    "${CMAKE_SOURCE_DIR}/src/stlink-env/*.h"
     "${CMAKE_SOURCE_DIR}/src/stlink-lib/*.h"
     "${CMAKE_BINARY_DIR}/inc/version.h")
 list(APPEND STLINK_HEADERS ${STLINK_LIB_HEADERS})

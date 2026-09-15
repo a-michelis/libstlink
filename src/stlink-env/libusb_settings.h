@@ -14,6 +14,17 @@
 #ifndef LIBUSB_SETTINGS_H
 #define LIBUSB_SETTINGS_H
 
+#if defined(_WIN32)
+/*
+ * libusb.h includes <windows.h> and then <winsock.h> unconditionally, and
+ * winsock.h and winsock2.h cannot both be used in one translation unit.
+ * sys_time.h brings in winsock2.h, so anything reaching libusb.h first would
+ * fail to compile. Including winsock2.h here sets _WINSOCKAPI_, which turns
+ * the winsock.h inside libusb.h into a no-op whichever order they arrive in.
+ */
+#include <winsock2.h>
+#endif
+
 #include <libusb.h>
 
 
