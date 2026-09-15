@@ -14,6 +14,10 @@
 #ifndef MAP_FILE_H
 #define MAP_FILE_H
 
+/* Ask fcntl.h first, so that the fallback below only fires where there really
+ * is no O_BINARY, rather than shadowing the one the platform defines. */
+#include <fcntl.h>
+
 #ifndef O_BINARY
 #define O_BINARY 0
 #endif // O_BINARY
