@@ -13,6 +13,8 @@
 
 #include "chipid.h"
 
+#include <stlink_fs.h>
+
 #include "logging.h"
 
 
@@ -212,76 +214,96 @@ void process_chipfile(char *fname) {
 }
 
 
-/* == Unix (POSIX) systems == */
+/* == Locating the chip description files == */
 
-#ifdef STLINK_HAVE_DIRENT_H
-#include <dirent.h>
+/*
+ * Resolved at run time rather than fixed at build time, so that an unpacked
+ * archive, or a tree moved after it was installed, still finds its own files.
+ * Candidates are tried in order:
+ *
+ *   0. a directory named by the caller, which is exclusive: nothing below is
+ *      tried, and finding nothing there is an error
+ *   1. the tree this was built from, in a debug build only
+ *   2. STLINK_CHIPS_DIR in the environment
+ *   3. beside the executable, in the installed layout
+ *   4. beside the executable, in a flat archive
+ *
+ * Named subdirectories are used rather than the executable's own directory,
+ * so that looking beside the executable costs a couple of lookups that fail
+ * cheaply, instead of scanning something like /usr/bin on every start.
+ */
+
+#define CHIP_FILE_EXT ".chip"
+
+/* Join base and tail, and report whether the result holds chip files. */
+static bool candidate_has_chips(char *out, size_t len, const char *base, const char *tail) {
+  int written = snprintf(out, len, "%s/%s", base, tail);
+
+  if((written < 0) || ((size_t)written >= len)) { return (false); }
+
+  DLOG("Looking for chip description files in %s\n", out);
+
+  return (stlink_dir_has(out, CHIP_FILE_EXT));
+}
 
 void init_chipids(char *dir_to_scan) {
-  DIR *d;
-  uint64_t nl; // namelen
-  struct dirent *dir;
-
-  if(!dir_to_scan) {
-    dir_to_scan = "./";
-  }
+  char exe[1024];
+  char path[1024];
+  const char *chosen = NULL;
+  const char *from_env = getenv("STLINK_CHIPS_DIR");
 
   devicelist = NULL;
-  d = opendir(dir_to_scan);
 
-  if(d) {
-    while ((dir = readdir(d)) != NULL) {
-      nl = (uint32_t) strlen(dir->d_name);
-
-      if(strcmp(dir->d_name + nl - 5, ".chip") == 0) {
-        char buf[1024];
-        sprintf(buf, "%s/%s", dir_to_scan, dir->d_name);
-        process_chipfile(buf);
-      }
+  /*
+   * A directory named by the caller is exclusive rather than preferred: they
+   * are pointing at something particular, very likely to test it, so reading
+   * some other set of chip files instead would hide their mistake rather than
+   * work around it. Nothing else is tried, and an empty directory is an error.
+   */
+  if((dir_to_scan != NULL) && (*dir_to_scan != '\0')) {
+    if(!stlink_dir_has(dir_to_scan, CHIP_FILE_EXT)) {
+      ELOG("No chip description file in %s\n", dir_to_scan);
+      return;
     }
 
-    closedir(d);
-  } else {
-    perror(dir_to_scan);
+    ILOG("Reading chip description files from %s\n", dir_to_scan);
+    stlink_dir_foreach(dir_to_scan, CHIP_FILE_EXT, process_chipfile);
+
     return;
   }
+
+#ifdef STLINK_CHIPS_SRC_DIR
+  /*
+   * A debug build goes straight to the tree it was built from: it is for
+   * working on the code rather than for installing, so the files it should be
+   * reading are the ones in the checkout. The macro is only defined for that
+   * configuration, so a release build carries no source path at all.
+   */
+  DLOG("Looking for chip description files in %s\n", STLINK_CHIPS_SRC_DIR);
+
+  if(stlink_dir_has(STLINK_CHIPS_SRC_DIR, CHIP_FILE_EXT)) { chosen = STLINK_CHIPS_SRC_DIR; }
+#endif
+
+  if((chosen == NULL) && (from_env != NULL) && (*from_env != '\0')) {
+    DLOG("Looking for chip description files in %s\n", from_env);
+
+    if(stlink_dir_has(from_env, CHIP_FILE_EXT)) { chosen = from_env; }
+  }
+
+  if((chosen == NULL) && stlink_exe_dir(exe, sizeof(exe))) {
+    if(candidate_has_chips(path, sizeof(path), exe, "../share/stlink/config/chips")) {
+      chosen = path;
+    } else if(candidate_has_chips(path, sizeof(path), exe, "chips")) {
+      chosen = path;
+    }
+  }
+
+  if(chosen == NULL) {
+    ELOG("Can't find any chip description file. Set STLINK_CHIPS_DIR, or run "
+         "with -v to see every path that was tried.\n");
+    return;
+  }
+
+  ILOG("Reading chip description files from %s\n", chosen);
+  stlink_dir_foreach(chosen, CHIP_FILE_EXT, process_chipfile);
 }
-
-#endif // STLINK_HAVE_DIRENT_H
-
-
-/* == Windows systems == */
-
-#ifdef STLINK_HAVE_WINDOWS_H
-#include <fileapi.h>
-#include <strsafe.h>
-
-void init_chipids(char *dir_to_scan) {
-  HANDLE hFind = INVALID_HANDLE_VALUE;
-  WIN32_FIND_DATAA ffd;
-  char filepath[MAX_PATH] = {0};
-
-  if(FAILED(StringCchCopyA(filepath, STLINK_ARRAY_SIZE(filepath), dir_to_scan)) ||
-      FAILED(StringCchCatA(filepath, STLINK_ARRAY_SIZE(filepath), "\\*.chip"))) {
-    ELOG("Path to chips's dir too long.\n");
-    return;
-  }
-
-  hFind = FindFirstFileA(filepath, &ffd);
-
-  if(INVALID_HANDLE_VALUE == hFind) {
-    ELOG("Can't find any chip description file in %s.\n", filepath);
-    return;
-  }
-
-  do {
-    StringCchCopyA(filepath, STLINK_ARRAY_SIZE(filepath), dir_to_scan);
-    StringCchCatA(filepath, STLINK_ARRAY_SIZE(filepath), "\\");
-    StringCchCatA(filepath, STLINK_ARRAY_SIZE(filepath), ffd.cFileName);
-    process_chipfile(filepath);
-  } while (FindNextFileA(hFind, &ffd) != 0);
-
-  FindClose(hFind);
-}
-
-#endif // STLINK_HAVE_WINDOWS_H
