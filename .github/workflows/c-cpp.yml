@@ -5,6 +5,7 @@ on:
     branches: [master, develop, testing]
   pull_request:
     branches: [master, develop, testing]
+  workflow_dispatch:
 
 jobs:
   # Linux builds with GCC and Clang on Ubuntu 22.04 and 24.04
@@ -185,27 +186,81 @@ jobs:
         working-directory: ./build/release
         run: sudo cmake --build . --target uninstall
 
-  # # Windows builds with MSVC
-  # windows_build:
-  #   name: Windows MSVC
-  #   runs-on: windows-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
+  # Windows builds with MSVC
+  # Visual Studio 2022 and vcpkg both ship on the windows-latest image, so
+  # neither has to be installed. vcpkg reads the manifest in vcpkg.json.
+  windows_msvc:
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - name: Windows_x64 msvc
+            arch: x64
+          - name: Windows_x86 msvc
+            arch: Win32
 
-  #     # Install Visual Studio 2022 Build Tools
-  #     - name: Install Visual Studio 2022 Build Tools
-  #       run: |
-  #         choco install visualstudio2022buildtools -y --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+    name: ${{ matrix.config.name }}
+    runs-on: windows-latest
 
-  #     - name: Configure project (Release)
-  #       run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+    steps:
+      - uses: actions/checkout@v4
 
-  #     - name: Build project (Release)
-  #       run: cmake --build build --config Release --parallel 4
+      - name: Verify CMake version
+        run: |
+          cmake --version
+          cmake --help | Select-String "Visual Studio"
 
-  #     - name: Run tests (Release)
-  #       working-directory: build
-  #       run: ctest --output-on-failure --parallel 4
+      # No -G on purpose: cmake picks whichever Visual Studio the image has.
+      # Pinning a generator by name goes stale, the runner image having moved
+      # to Visual Studio 18 while every example still says 17 2022.
+      - name: Configure project (Debug)
+        run: >
+          cmake -S . -B build/debug -A ${{ matrix.config.arch }}
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+
+      - name: Build project (Debug)
+        run: cmake --build build/debug --config Debug --parallel 4
+
+      - name: Run tests (Debug)
+        working-directory: build/debug
+        run: ctest --output-on-failure --build-config Debug --parallel 4
+
+      - name: Configure project (Release)
+        run: >
+          cmake -S . -B build/release -A ${{ matrix.config.arch }}
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+
+      - name: Build project (Release)
+        run: cmake --build build/release --config Release --parallel 4
+
+      - name: Install project
+        run: cmake --install build/release --config Release --prefix "${{ github.workspace }}/stage"
+
+      # The install rules resolve runtime dependencies themselves, so list what
+      # actually landed: a missing libusb-1.0.dll here is what makes an
+      # installed st-info.exe fail to start on a machine without vcpkg.
+      - name: Show installed tree
+        run: Get-ChildItem -Recurse -File "${{ github.workspace }}/stage" | ForEach-Object { $_.FullName.Replace("${{ github.workspace }}\stage\", "") }
+
+      - name: Package project
+        run: cmake --build build/release --config Release --target package
+
+      # Every path inside the zip, so that an absolute one, or a stray copy of
+      # the builder's own directory layout, is visible here rather than in
+      # somebody's download.
+      - name: Show package contents
+        run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          Get-ChildItem build/release/dist -Filter *.zip | ForEach-Object {
+            Write-Output "=== $($_.Name) ($([math]::Round($_.Length / 1KB)) KB) ==="
+            $zip = [IO.Compression.ZipFile]::OpenRead($_.FullName)
+            $zip.Entries | ForEach-Object { Write-Output $_.FullName }
+            $zip.Dispose()
+          }
+
+      - name: Uninstall project
+        run: cmake --build build/release --config Release --target uninstall
 
   # Cross-compilation for MinGW (Windows)
   mingw_cross_compile:
@@ -222,3 +277,21 @@ jobs:
       - name: Cross-compile for Windows
         run: |
           sudo sh ./gen_binaries_win.sh
+
+      - name: Show package contents
+        run: |
+          for z in build/Release/dist/*.zip; do
+            echo "=== $(basename "$z") ($(du -h "$z" | cut -f1)) ==="
+            unzip -l "$z"
+          done
+
+      # What an installed binary would need beside it. Nothing outside the
+      # system set should appear here.
+      - name: Show imported DLLs
+        run: |
+          mkdir -p /tmp/unpacked && cd /tmp/unpacked
+          unzip -oq "${GITHUB_WORKSPACE}"/build/Release/dist/*x86_64*.zip || unzip -oq "${GITHUB_WORKSPACE}"/build/Release/dist/*.zip
+          for exe in $(find . -name '*.exe'); do
+            echo "=== $exe ==="
+            x86_64-w64-mingw32-objdump -p "$exe" 2>/dev/null | grep -i "DLL Name" || true
+          done
