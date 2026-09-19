@@ -24,10 +24,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install the compiler
+      - name: Install the compiler and libusb
         run: |
           sudo apt-get update
-          sudo apt-get install -y ${{ matrix.config.pkg }}
+          sudo apt-get install -y ${{ matrix.config.pkg }} pkg-config libusb-1.0-0-dev
 
       - name: Build (Debug)
         run: |
@@ -56,6 +56,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install libusb
+        run: brew install libusb pkg-config
 
       - name: Build (Debug)
         run: |

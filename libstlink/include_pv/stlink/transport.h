@@ -22,6 +22,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -121,6 +122,23 @@ namespace stlink
     protected:
         ITransport() = default;
     };
+
+    /**
+     * @brief Every attached programmer with this vendor id.
+     *
+     * Implemented by whichever backend was compiled in. Nothing is opened for
+     * longer than it takes to read a serial, so this is safe to call while
+     * other programmers are in use.
+     */
+    [[nodiscard]] std::vector<ProbeAddress> enumerate_probes(std::uint16_t vid);
+
+    /**
+     * @brief Connect to one of the programmers enumerate_probes() reported.
+     *
+     * The transport is connected when it is returned and disconnected when it
+     * is destroyed.
+     */
+    [[nodiscard]] Result<std::unique_ptr<ITransport>> open_transport(const ProbeAddress &probe);
 } // namespace stlink
 
 #endif // STLINK_PV_TRANSPORT_H

@@ -31,6 +31,7 @@ namespace stlink
         Unknown = 0,
 
         /* Talking to the probe */
+        IO,            /**< The bus or the driver failed to move the bytes. */
         NotFound,      /**< No device matched. */
         AccessDenied,  /**< The operating system refused. */
         Busy,          /**< Something else holds the device. */

@@ -17,6 +17,20 @@ else ()
     set(STLINK_OS linux)
 endif()
 
+# How USB is reached. Named after the library rather than the system, because
+# several systems use the same one: Windows will use WinUSB, and macOS may get
+# its own, but until those exist libusb serves everywhere it is available.
+if (WIN32)
+    set(STLINK_USB "")
+    message(STATUS "USB transport: none yet on Windows; WinUSB is not written")
+else ()
+    set(STLINK_USB libusb)
+
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(LIBUSB REQUIRED IMPORTED_TARGET libusb-1.0)
+    message(STATUS "USB transport: libusb ${LIBUSB_VERSION}")
+endif()
+
 target_sources(stlink
     PRIVATE
         src/${STLINK_OS}/paths.cpp
@@ -37,6 +51,14 @@ target_include_directories(stlink
 )
 
 target_compile_features(stlink PUBLIC cxx_std_17)
+
+if (STLINK_USB)
+    target_sources(stlink PRIVATE src/${STLINK_USB}/usb_transport.cpp)
+endif()
+
+if (STLINK_USB STREQUAL libusb)
+    target_link_libraries(stlink PRIVATE PkgConfig::LIBUSB)
+endif()
 
 # STLINK_EXPORT is private, so export.h declares an export while the library is
 # being built and an import everywhere else. Hidden visibility elsewhere makes

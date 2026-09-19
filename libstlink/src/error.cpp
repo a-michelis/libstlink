@@ -15,6 +15,8 @@ namespace stlink
         {
         case ErrorCode::Unknown:
             return "unknown";
+        case ErrorCode::IO:
+            return "input or output";
         case ErrorCode::NotFound:
             return "not found";
         case ErrorCode::AccessDenied:
