@@ -1,0 +1,134 @@
+name: CI
+
+on:
+  workflow_dispatch:
+
+jobs:
+  linux:
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - { name: Ubuntu22.04_x64 gcc11,   os: ubuntu-22.04, cxx: g++-11,     pkg: g++-11 }
+          - { name: Ubuntu22.04_x64 gcc12,   os: ubuntu-22.04, cxx: g++-12,     pkg: g++-12 }
+          - { name: Ubuntu22.04_x64 clang14, os: ubuntu-22.04, cxx: clang++-14, pkg: clang-14 }
+          - { name: Ubuntu22.04_x64 clang15, os: ubuntu-22.04, cxx: clang++-15, pkg: clang-15 }
+          - { name: Ubuntu24.04_x64 gcc13,   os: ubuntu-24.04, cxx: g++-13,     pkg: g++-13 }
+          - { name: Ubuntu24.04_x64 gcc14,   os: ubuntu-24.04, cxx: g++-14,     pkg: g++-14 }
+          - { name: Ubuntu24.04_x64 clang16, os: ubuntu-24.04, cxx: clang++-16, pkg: clang-16 }
+          - { name: Ubuntu24.04_x64 clang17, os: ubuntu-24.04, cxx: clang++-17, pkg: clang-17 }
+          - { name: Ubuntu24.04_x64 clang18, os: ubuntu-24.04, cxx: clang++-18, pkg: clang-18 }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.config.pkg }}
+
+      - name: Build (Debug)
+        run: |
+          cmake -S . -B build/debug -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=${{ matrix.config.cxx }}
+          cmake --build build/debug -j
+
+      - name: Build (Release)
+        run: |
+          cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=${{ matrix.config.cxx }}
+          cmake --build build/release -j
+
+      - name: Build (Release, shared)
+        run: |
+          cmake -S . -B build/shared -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON -DCMAKE_CXX_COMPILER=${{ matrix.config.cxx }}
+          cmake --build build/shared -j
+
+  macos:
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - { name: macOS-14 clang, os: macos-14 }
+          - { name: macOS-15 clang, os: macos-15 }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build (Debug)
+        run: |
+          cmake -S . -B build/debug -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build/debug -j
+
+      - name: Build (Release)
+        run: |
+          cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/release -j
+
+      - name: Build (Release, shared)
+        run: |
+          cmake -S . -B build/shared -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON
+          cmake --build build/shared -j
+
+  windows_msvc:
+    name: Windows MSVC
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build (Debug)
+        run: |
+          cmake -S . -B build/debug -A x64
+          cmake --build build/debug --config Debug
+
+      - name: Build (Release)
+        run: |
+          cmake -S . -B build/release -A x64
+          cmake --build build/release --config Release
+
+      - name: Build (Release, shared)
+        run: |
+          cmake -S . -B build/shared -A x64 -DBUILD_SHARED_LIBS=ON
+          cmake --build build/shared --config Release
+
+  windows_mingw:
+    name: MinGW Cross-Compilation (Windows)
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the MinGW toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mingw-w64
+
+      - name: Build (Release)
+        run: |
+          cmake -S . -B build/mingw \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_SYSTEM_NAME=Windows \
+            -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
+            -DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres \
+            -DCMAKE_FIND_ROOT_PATH=/usr/x86_64-w64-mingw32 \
+            -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
+            -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
+            -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
+          cmake --build build/mingw -j
+
+      - name: Build (Release, shared)
+        run: |
+          cmake -S . -B build/mingw-shared \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_SYSTEM_NAME=Windows \
+            -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
+            -DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres \
+            -DCMAKE_FIND_ROOT_PATH=/usr/x86_64-w64-mingw32 \
+            -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
+            -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
+            -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
+          cmake --build build/mingw-shared -j
