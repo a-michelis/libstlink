@@ -11,7 +11,7 @@ add_library(stlink::stlink ALIAS stlink)
 
 target_sources(stlink
     PRIVATE
-        # sources are added here as they are written
+        src/log.cpp
 )
 
 target_include_directories(stlink
@@ -28,6 +28,12 @@ target_compile_features(stlink PUBLIC cxx_std_17)
 # being built and an import everywhere else. Hidden visibility elsewhere makes
 # the non-Windows builds agree with Windows about what is public.
 target_compile_definitions(stlink PRIVATE STLINK_EXPORT)
+
+if (MINGW)
+    # mingw-w64 ships both the Microsoft printf and a C99 one. Ask for the
+    # latter, so that %zu and %llu mean what they mean everywhere else.
+    target_compile_definitions(stlink PUBLIC __USE_MINGW_ANSI_STDIO=1)
+endif()
 
 if (NOT BUILD_SHARED_LIBS)
     target_compile_definitions(stlink PUBLIC STLINK_STATIC)
