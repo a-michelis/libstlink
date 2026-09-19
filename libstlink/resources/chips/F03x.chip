@@ -1,14 +1,19 @@
-# Chip-ID file for STM32F03x device
-#
-dev_type STM32F03x
-ref_manual_id 0091
-chip_id 0x444                // STM32_CHIPID_F0xx_SMALL
-flash_type F0_F1_F3
-flash_size_reg 0x1ffff7cc
-flash_pagesize 0x400         // 1 KB
-sram_size 0x1000             // 4 KB
-bootrom_base 0x1fffec00
-bootrom_size 0xc00           // 3 KB
-option_base 0x1ffff800       // STM32_OPTION_BYTES_BASE_F0
-option_size 0x10             // 16 B
-flags none
+# STM32F03x
+
+name             STM32F03x
+reference        RM0091
+chip_id          0x444       # STM32_CHIPID_F0xx_SMALL
+family           F0_F1_F3
+
+flash.base       0x08000000
+flash.size_reg   0x1ffff7cc
+flash.page_size  0x400       # 1 KB
+
+sram.base        0x20000000
+sram.size        0x1000      # 4 KB
+
+bootrom.base     0x1fffec00
+bootrom.size     0xc00       # 3 KB
+
+option.base      0x1ffff800  # STM32_OPTION_BYTES_BASE_F0
+option.size      0x10        # 16 B
