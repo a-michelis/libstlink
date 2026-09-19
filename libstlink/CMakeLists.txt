@@ -11,6 +11,7 @@ add_library(stlink::stlink ALIAS stlink)
 
 target_sources(stlink
     PRIVATE
+        src/chip_description.cpp
         src/error.cpp
         src/log.cpp
         src/result.cpp
