@@ -21,8 +21,8 @@ endif()
 # several systems use the same one: Windows will use WinUSB, and macOS may get
 # its own, but until those exist libusb serves everywhere it is available.
 if (WIN32)
-    set(STLINK_USB "")
-    message(STATUS "USB transport: none yet on Windows; WinUSB is not written")
+    set(STLINK_USB winusb)
+    message(STATUS "USB transport: WinUSB, which ships with the system")
 else ()
     set(STLINK_USB libusb)
 
@@ -58,6 +58,9 @@ endif()
 
 if (STLINK_USB STREQUAL libusb)
     target_link_libraries(stlink PRIVATE PkgConfig::LIBUSB)
+elseif (STLINK_USB STREQUAL winusb)
+    # All three ship with Windows: winusb drives the device, setupapi finds it.
+    target_link_libraries(stlink PRIVATE winusb setupapi)
 endif()
 
 # STLINK_EXPORT is private, so export.h declares an export while the library is
