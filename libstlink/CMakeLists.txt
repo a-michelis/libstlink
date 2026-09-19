@@ -24,5 +24,19 @@ target_include_directories(stlink
 
 target_compile_features(stlink PUBLIC cxx_std_17)
 
+# STLINK_EXPORT is private, so export.h declares an export while the library is
+# being built and an import everywhere else. Hidden visibility elsewhere makes
+# the non-Windows builds agree with Windows about what is public.
+target_compile_definitions(stlink PRIVATE STLINK_EXPORT)
+
+if (NOT BUILD_SHARED_LIBS)
+    target_compile_definitions(stlink PUBLIC STLINK_STATIC)
+endif()
+
+set_target_properties(stlink PROPERTIES
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN ON
+)
+
 install(TARGETS stlink EXPORT stlinkTargets)
 install(DIRECTORY include/stlink DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
