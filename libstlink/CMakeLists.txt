@@ -9,8 +9,17 @@
 add_library(stlink)
 add_library(stlink::stlink ALIAS stlink)
 
+if (WIN32)
+    set(STLINK_OS windows)
+elseif (APPLE)
+    set(STLINK_OS darwin)
+else ()
+    set(STLINK_OS linux)
+endif()
+
 target_sources(stlink
     PRIVATE
+        src/${STLINK_OS}/paths.cpp
         src/chip_description.cpp
         src/error.cpp
         src/log.cpp
