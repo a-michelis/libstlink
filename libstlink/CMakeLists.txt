@@ -11,7 +11,9 @@ add_library(stlink::stlink ALIAS stlink)
 
 target_sources(stlink
     PRIVATE
+        src/error.cpp
         src/log.cpp
+        src/result.cpp
 )
 
 target_include_directories(stlink
