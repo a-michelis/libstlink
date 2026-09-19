@@ -20,10 +20,12 @@ endif()
 target_sources(stlink
     PRIVATE
         src/${STLINK_OS}/paths.cpp
+        src/chip_database.cpp
         src/chip_description.cpp
         src/error.cpp
         src/log.cpp
         src/result.cpp
+        src/stlink.cpp
 )
 
 target_include_directories(stlink
@@ -46,6 +48,12 @@ if (MINGW)
     # latter, so that %zu and %llu mean what they mean everywhere else.
     target_compile_definitions(stlink PUBLIC __USE_MINGW_ANSI_STDIO=1)
 endif()
+
+# Where init() looks for the chip descriptions when it is not told: beside the
+# program, which is the second place it tries.
+install(DIRECTORY resources/chips/
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/stlink/config/chips"
+        FILES_MATCHING PATTERN "*.chip")
 
 if (NOT BUILD_SHARED_LIBS)
     target_compile_definitions(stlink PUBLIC STLINK_STATIC)
