@@ -47,6 +47,7 @@ target_sources(stlink_objects
         src/command.cpp
         src/error.cpp
         src/log.cpp
+        src/programmer_base.cpp
         src/protocol.cpp
         src/result.cpp
         src/stlink.cpp
