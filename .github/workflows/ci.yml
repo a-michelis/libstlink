@@ -135,3 +135,37 @@ jobs:
             -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
             -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
           cmake --build build/mingw-shared -j
+
+  tests:
+    name: Tests ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - { name: Linux,   os: ubuntu-24.04 }
+          - { name: macOS,   os: macos-15 }
+          - { name: Windows, os: windows-latest }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install libusb
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libusb-1.0-0-dev
+
+      - name: Install libusb
+        if: runner.os == 'macOS'
+        run: brew install libusb pkg-config
+
+      # One configuration is enough: the tests exercise logic, not the build
+      # variants the jobs above are there to cover.
+      - name: Build
+        run: |
+          cmake -S . -B build/tests -DCMAKE_BUILD_TYPE=Debug -DSTLINK_BUILD_TESTS=ON
+          cmake --build build/tests --config Debug -j
+
+      - name: Test
+        run: ctest --test-dir build/tests --build-config Debug --output-on-failure
