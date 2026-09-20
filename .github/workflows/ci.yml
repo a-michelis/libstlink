@@ -29,10 +29,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ${{ matrix.config.pkg }} pkg-config libusb-1.0-0-dev
 
-      - name: Build (Debug)
+      - name: Build (Debug, with tests)
         run: |
-          cmake -S . -B build/debug -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=${{ matrix.config.cxx }}
+          cmake -S . -B build/debug -DCMAKE_BUILD_TYPE=Debug -DSTLINK_BUILD_TESTS=ON -DCMAKE_CXX_COMPILER=${{ matrix.config.cxx }}
           cmake --build build/debug -j
+
+      - name: Test
+        run: ctest --test-dir build/debug --output-on-failure
 
       - name: Build (Release)
         run: |
@@ -60,10 +63,13 @@ jobs:
       - name: Install libusb
         run: brew install libusb pkg-config
 
-      - name: Build (Debug)
+      - name: Build (Debug, with tests)
         run: |
-          cmake -S . -B build/debug -DCMAKE_BUILD_TYPE=Debug
+          cmake -S . -B build/debug -DCMAKE_BUILD_TYPE=Debug -DSTLINK_BUILD_TESTS=ON
           cmake --build build/debug -j
+
+      - name: Test
+        run: ctest --test-dir build/debug --output-on-failure
 
       - name: Build (Release)
         run: |
@@ -82,10 +88,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build (Debug)
+      - name: Build (Debug, with tests)
         run: |
-          cmake -S . -B build/debug -A x64
+          cmake -S . -B build/debug -A x64 -DSTLINK_BUILD_TESTS=ON
           cmake --build build/debug --config Debug
+
+      - name: Test
+        run: ctest --test-dir build/debug --build-config Debug --output-on-failure
 
       - name: Build (Release)
         run: |
@@ -109,6 +118,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y mingw-w64
 
+      # No tests here: gtest_discover_tests runs the test binary at build time
+      # to enumerate its cases, and these are Windows binaries built on Linux.
       - name: Build (Release)
         run: |
           cmake -S . -B build/mingw \
@@ -136,36 +147,3 @@ jobs:
             -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
           cmake --build build/mingw-shared -j
 
-  tests:
-    name: Tests ${{ matrix.config.name }}
-    runs-on: ${{ matrix.config.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        config:
-          - { name: Linux,   os: ubuntu-24.04 }
-          - { name: macOS,   os: macos-15 }
-          - { name: Windows, os: windows-latest }
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install libusb
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libusb-1.0-0-dev
-
-      - name: Install libusb
-        if: runner.os == 'macOS'
-        run: brew install libusb pkg-config
-
-      # One configuration is enough: the tests exercise logic, not the build
-      # variants the jobs above are there to cover.
-      - name: Build
-        run: |
-          cmake -S . -B build/tests -DCMAKE_BUILD_TYPE=Debug -DSTLINK_BUILD_TESTS=ON
-          cmake --build build/tests --config Debug -j
-
-      - name: Test
-        run: ctest --test-dir build/tests --build-config Debug --output-on-failure
