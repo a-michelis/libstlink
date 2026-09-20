@@ -107,7 +107,7 @@ jobs:
           cmake --build build/shared --config Release
 
   windows_mingw:
-    name: MinGW Cross-Compilation (Windows)
+    name: MinGW Cross-Compilation (Linux to Windows)
     runs-on: ubuntu-24.04
 
     steps:
@@ -147,3 +147,43 @@ jobs:
             -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
           cmake --build build/mingw-shared -j
 
+
+  windows_mingw_native:
+    name: MinGW Native (Windows)
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+
+      # Native, so the tests can actually be run: this is the one MinGW build
+      # whose binaries execute on the machine that produced them.
+      - name: Build (Debug, with tests)
+        run: |
+          cmake -S . -B build/debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DSTLINK_BUILD_TESTS=ON
+          cmake --build build/debug -j
+
+      - name: Test
+        run: ctest --test-dir build/debug --output-on-failure
+
+      - name: Build (Release)
+        run: |
+          cmake -S . -B build/release -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/release -j
+
+      - name: Build (Release, shared)
+        run: |
+          cmake -S . -B build/shared -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON
+          cmake --build build/shared -j
