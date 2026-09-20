@@ -17,6 +17,7 @@
 
 #include <stlink/command.h>
 #include <stlink/log.h>
+#include <stlink/programmer_v1.h>
 #include <stlink/programmer_v2.h>
 #include <stlink/programmer_v3.h>
 #include <stlink/protocol.h>
@@ -108,13 +109,11 @@ namespace stlink
             break;
 
         case ProtocolApi::V1:
+            programmer.reset(new ProgrammerV1(std::move(channel), report));
+            break;
+
         default:
-            /*
-             * The original command set, which only an ST-LINK/V1 older than
-             * firmware J12 speaks. Not implemented yet.
-             */
-            return Error(ErrorCode::NotSupported,
-                         "this programmer speaks the original ST-LINK/V1 command set");
+            return Error(ErrorCode::Internal, "the programmer named a command set we do not have");
         }
 
         /*
