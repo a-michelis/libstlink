@@ -20,6 +20,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 #include <stlink/result.h>
 #include <stlink/transport.h>
@@ -108,7 +109,27 @@ namespace stlink
         /** @brief Voltage on the target's reference pin, in millivolts. */
         [[nodiscard]] virtual Result<std::uint32_t> target_voltage() = 0;
 
-        /** @brief Set the debug clock. The nearest supported rate is used. */
+        /**
+         * @brief The debug clock rates this programmer will accept, in hertz.
+         *
+         * A V2 offers a table fixed in its firmware; a V3 is asked, because
+         * what it offers depends on how it is itself clocked. Empty when the
+         * programmer cannot be told a rate at all.
+         */
+        [[nodiscard]] virtual Result<std::vector<std::uint32_t>> clock_rates() = 0;
+
+        /**
+         * @brief Set the debug clock to exactly @p hz.
+         *
+         * One of the rates clock_rates() reported, and nothing else: a rate
+         * that is not on offer is refused rather than rounded. Rounding down
+         * would quietly turn a request into a ceiling, and rounding up would
+         * overclock a connection that may not carry it.
+         *
+         * Zero asks for this generation's default rate, for a caller with no
+         * opinion. It is a conservative rate rather than the fastest offered,
+         * because the fastest is the one a marginal connection fails at.
+         */
         [[nodiscard]] virtual VoidResult set_clock(std::uint32_t hz) = 0;
 
         /**
@@ -202,6 +223,7 @@ namespace stlink
     protected:
         IProgrammer() = default;
     };
+
 } // namespace stlink
 
 #endif // STLINK_PV_PROGRAMMER_H
