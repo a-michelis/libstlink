@@ -224,6 +224,17 @@ namespace stlink
         IProgrammer() = default;
     };
 
+    /**
+     * @brief Connect to a programmer and find out what it is.
+     *
+     * Opens a transport to @p probe, asks the version, and returns whichever
+     * implementation speaks the command set it answered with. Connected when
+     * it is returned and disconnected when it is destroyed.
+     *
+     * The product id decides how the version is asked for, since a V3 uses a
+     * different command for it; the reply decides everything after that.
+     */
+    [[nodiscard]] Result<std::unique_ptr<IProgrammer>> open_programmer(const ProbeAddress &probe);
 } // namespace stlink
 
 #endif // STLINK_PV_PROGRAMMER_H
