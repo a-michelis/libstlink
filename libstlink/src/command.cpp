@@ -77,7 +77,9 @@ namespace stlink
             return sent.error().wrap(ErrorCode::IO, what);
         }
 
-        if (sent.value() != command_size)
+        const std::size_t written = sent.value();
+
+        if (written != command_size)
         {
             /*
              * The programmer took some of the command. Nothing in the protocol
@@ -85,7 +87,7 @@ namespace stlink
              * reply, or the absence of one, decide.
              */
             STLINK_LOG_WRN("%s: the programmer took %zu bytes of a %zu byte command", what,
-                           sent.value(), command_size);
+                           written, command_size);
         }
 
         return {};
