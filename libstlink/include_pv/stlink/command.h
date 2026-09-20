@@ -82,8 +82,19 @@ namespace stlink
         CommandChannel(const CommandChannel &) = delete;
         CommandChannel &operator=(const CommandChannel &) = delete;
 
+        /**
+         * @brief Move a channel, and the transport it owns, elsewhere.
+         *
+         * The version exchange happens before it is known which programmer
+         * will own the connection, so the channel that carried it is moved
+         * into whichever one that turns out to be.
+         */
+        CommandChannel(CommandChannel &&) noexcept = default;
+        CommandChannel &operator=(CommandChannel &&) noexcept = default;
+
         /** @brief The transport underneath, for the few things that need it. */
         [[nodiscard]] ITransport &transport() noexcept;
+        [[nodiscard]] const ITransport &transport() const noexcept;
 
         /**
          * @brief Send a command and read its reply.

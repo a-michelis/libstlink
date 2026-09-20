@@ -67,6 +67,11 @@ namespace stlink
         return *transport_;
     }
 
+    const ITransport &CommandChannel::transport() const noexcept
+    {
+        return *transport_;
+    }
+
     VoidResult CommandChannel::send(const std::uint8_t *command, std::size_t command_size,
                                     const char *what)
     {
