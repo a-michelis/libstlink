@@ -23,4 +23,13 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 include(GNUInstallDirs)
 
+option(STLINK_BUILD_TESTS "Build the test suite" OFF)
+
 add_subdirectory(libstlink)
+
+# Tests are a subdirectory that is simply not entered when they are off, so a
+# normal build neither fetches anything nor defines a test target.
+if (STLINK_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(libstlink/tests)
+endif()

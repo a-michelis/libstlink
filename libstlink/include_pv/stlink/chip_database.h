@@ -26,6 +26,14 @@ namespace stlink
     class ChipDatabase
     {
     public:
+        /**
+         * @brief An empty database.
+         *
+         * The library uses instance(); this is public so that a test can have
+         * one of its own rather than borrowing the shared one.
+         */
+        ChipDatabase() = default;
+
         /** @brief The library's one database. */
         static ChipDatabase &instance();
 
@@ -59,8 +67,6 @@ namespace stlink
         [[nodiscard]] const std::vector<ChipDescription> &all() const noexcept;
 
     private:
-        ChipDatabase() = default;
-
         std::vector<ChipDescription> chips_;
     };
 } // namespace stlink
