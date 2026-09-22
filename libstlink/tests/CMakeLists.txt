@@ -43,6 +43,7 @@ endfunction()
 
 stlink_test(test_chip_description test_chip_description.cpp)
 stlink_test(test_chip_database    test_chip_database.cpp)
+stlink_test(test_chip_identity    test_chip_identity.cpp)
 stlink_test(test_command          test_command.cpp)
 stlink_test(test_protocol         test_protocol.cpp)
 stlink_test(test_programmer_v1    test_programmer_v1.cpp)

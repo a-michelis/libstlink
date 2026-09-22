@@ -44,6 +44,7 @@ target_sources(stlink_objects
         src/${STLINK_OS}/paths.cpp
         src/chip_database.cpp
         src/chip_description.cpp
+        src/chip_identity.cpp
         src/command.cpp
         src/error.cpp
         src/log.cpp
