@@ -312,4 +312,25 @@ namespace stlink
 
         return chip;
     }
+
+    std::uint32_t flash_size_from(const ChipDescription &chip, std::uint32_t raw) noexcept
+    {
+        if (chip.flash_size_reg == 0)
+        {
+            return 0;
+        }
+
+        /*
+         * The low bits of the address say where in the word the size sits.
+         * A register at ...22 is the upper halfword of the word at ...20,
+         * which is why the address is carried here rather than masked off by
+         * whoever did the read.
+         */
+        if ((chip.flash_size_reg & 2u) != 0)
+        {
+            raw >>= 16;
+        }
+
+        return (raw & 0xffffu) * 1024u;
+    }
 } // namespace stlink

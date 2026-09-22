@@ -191,3 +191,38 @@ TEST(ChipDescription, UnknownFamilyHasNoName)
     EXPECT_EQ(flash_family_from_string("nonsense"), FlashFamily::Unknown);
     EXPECT_EQ(to_string(FlashFamily::Unknown), nullptr);
 }
+
+TEST(FlashSize, ReadsTheLowerHalfwordWhenTheRegisterIsWordAligned)
+{
+    ChipDescription chip;
+    chip.flash_size_reg = 0x1ffff7e0;
+
+    /* The upper half is something else entirely and must be ignored. */
+    EXPECT_EQ(flash_size_from(chip, 0xdead0080), 128u * 1024u);
+}
+
+TEST(FlashSize, ReadsTheUpperHalfwordWhenTheRegisterEndsInTwo)
+{
+    ChipDescription chip;
+    chip.flash_size_reg = 0x1fff7a22;
+
+    /* An F411 keeps its size in the upper half of the word at ...20. */
+    EXPECT_EQ(flash_size_from(chip, 0x0200beef), 512u * 1024u);
+}
+
+TEST(FlashSize, ReportsBytesRatherThanWhatTheChipSays)
+{
+    ChipDescription chip;
+    chip.flash_size_reg = 0x1ffff7e0;
+
+    EXPECT_EQ(flash_size_from(chip, 64), 64u * 1024u);
+}
+
+TEST(FlashSize, IsZeroWhenTheChipKeepsNoSizeRegister)
+{
+    ChipDescription chip;
+    chip.flash_size_reg = 0;
+
+    /* Nothing was read, so nothing is claimed, whatever the word holds. */
+    EXPECT_EQ(flash_size_from(chip, 0xffffffff), 0u);
+}

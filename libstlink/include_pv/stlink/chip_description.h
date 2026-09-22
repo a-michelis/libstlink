@@ -119,6 +119,24 @@ namespace stlink
      * typo is reported instead of quietly leaving a field at zero.
      */
     [[nodiscard]] Result<ChipDescription> parse_chip_description(std::string_view text);
+
+    /**
+     * @brief The flash size, in bytes, that @p raw means for this chip.
+     *
+     * @p raw is the word read from @ref ChipDescription::flash_size_reg with
+     * its low two bits cleared, because the register is read word aligned.
+     * Those bits are not noise: an address ending in 2 means the size is the
+     * upper halfword of that word rather than the lower one, which is why the
+     * caller must not mask them off before getting here.
+     *
+     * The chip reports kilobytes; this returns bytes.
+     *
+     * This is the rule almost every part follows, and it is applied to all of
+     * them. A few encode it differently, and until their flash families exist
+     * this reports the wrong number for those: see the backlog.
+     */
+    [[nodiscard]] std::uint32_t flash_size_from(const ChipDescription &chip,
+                                                std::uint32_t raw) noexcept;
 } // namespace stlink
 
 #endif // STLINK_PV_CHIP_DESCRIPTION_H

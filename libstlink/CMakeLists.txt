@@ -46,6 +46,7 @@ target_sources(stlink_objects
         src/chip_description.cpp
         src/chip_identity.cpp
         src/command.cpp
+        src/device.cpp
         src/error.cpp
         src/log.cpp
         src/programmer.cpp
