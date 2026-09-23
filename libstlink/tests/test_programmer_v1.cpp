@@ -141,7 +141,7 @@ TEST(ProgrammerV1, EntersDebugWithTheOlderEnterCommand)
     V1 f(a_v1());
     f.recorder->answers({});
 
-    ASSERT_TRUE(f.programmer->enter_debug(DebugMode::Swd, ResetMode::Normal).ok());
+    ASSERT_TRUE(f.programmer->enter_debug(DebugMode::Swd).ok());
 
     EXPECT_EQ(f.recorder->sent[0][kAt + 1], 0x20); /* ApiV1Enter */
     EXPECT_EQ(f.recorder->sent[0][kAt + 2], 0xa3); /* EnterSwd */
@@ -266,14 +266,19 @@ TEST(ProgrammerV1, OffersNoClockRatesAtAll)
     EXPECT_TRUE(rates.value().empty());
 }
 
-TEST(ProgrammerV1, RefusesToConnectToATargetHeldInReset)
+TEST(ProgrammerV1, CannotHoldATargetInReset)
 {
     V1 f(a_v1());
 
-    auto entered = f.programmer->enter_debug(DebugMode::Swd, ResetMode::UnderReset);
+    /*
+     * What makes connecting under reset impossible on a V1 is that it cannot
+     * drive nRST at all: the command arrived with the V2 set. The refusal is
+     * here rather than in enter_debug, which now only enters debug.
+     */
+    auto held = f.programmer->reset_pin(true);
 
-    ASSERT_FALSE(entered.ok());
-    EXPECT_EQ(entered.error().code(), ErrorCode::NotSupported);
+    ASSERT_FALSE(held.ok());
+    EXPECT_EQ(held.error().code(), ErrorCode::NotSupported);
     EXPECT_TRUE(f.recorder->sent.empty());
 }
 
@@ -281,7 +286,7 @@ TEST(ProgrammerV1, RefusesJtag)
 {
     V1 f(a_v1());
 
-    EXPECT_EQ(f.programmer->enter_debug(DebugMode::Jtag, ResetMode::Normal).error().code(),
+    EXPECT_EQ(f.programmer->enter_debug(DebugMode::Jtag).error().code(),
               ErrorCode::NotSupported);
 }
 

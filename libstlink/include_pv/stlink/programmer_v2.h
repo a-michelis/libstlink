@@ -35,7 +35,7 @@ namespace stlink
         /* ---- Getting to a target ------------------------------------ */
 
         [[nodiscard]] VoidResult exit_dfu() override;
-        [[nodiscard]] VoidResult enter_debug(DebugMode debug, ResetMode reset) override;
+        [[nodiscard]] VoidResult enter_debug(DebugMode debug) override;
         [[nodiscard]] VoidResult exit_debug() override;
         [[nodiscard]] VoidResult select_access_port(std::uint8_t ap) override;
         [[nodiscard]] Result<std::uint32_t> core_id() override;

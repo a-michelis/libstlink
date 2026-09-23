@@ -238,7 +238,7 @@ namespace stlink
         return channel().send(block.data(), block.size(), "leaving firmware update mode");
     }
 
-    VoidResult ProgrammerV2::enter_debug(DebugMode debug, ResetMode reset)
+    VoidResult ProgrammerV2::enter_debug(DebugMode debug)
     {
         if (debug == DebugMode::Jtag)
         {
@@ -249,17 +249,6 @@ namespace stlink
              * that will not be understood.
              */
             return Error(ErrorCode::NotSupported, "entering debug over JTAG");
-        }
-
-        if (reset == ResetMode::UnderReset)
-        {
-            /* Hold the target still, so it cannot run away before we attach. */
-            auto held = reset_pin(true);
-
-            if (!held.ok())
-            {
-                return held.error().wrap(ErrorCode::IO, "holding the target in reset to connect");
-            }
         }
 
         auto block = begin(Direction::FromDevice, kStatusReply);
@@ -275,16 +264,6 @@ namespace stlink
         if (!sent.ok())
         {
             return sent.error();
-        }
-
-        if (reset == ResetMode::UnderReset)
-        {
-            auto released = reset_pin(false);
-
-            if (!released.ok())
-            {
-                return released.error().wrap(ErrorCode::IO, "releasing the target after connecting");
-            }
         }
 
         return {};

@@ -244,20 +244,18 @@ namespace stlink
         return send(block, "leaving firmware update mode");
     }
 
-    VoidResult ProgrammerV1::enter_debug(DebugMode debug, ResetMode reset)
+    VoidResult ProgrammerV1::enter_debug(DebugMode debug)
     {
         if (debug == DebugMode::Jtag)
         {
             return Error(ErrorCode::NotSupported, "entering debug over JTAG");
         }
 
-        if (reset == ResetMode::UnderReset)
-        {
-            /* Holding nRST needs a command this firmware does not have. */
-            return Error(ErrorCode::NotSupported,
-                         "connecting to a target held in reset on this firmware");
-        }
-
+        /*
+         * Connecting under reset is refused a layer up rather than here,
+         * because what this firmware lacks is the command to drive nRST, and
+         * that refusal comes from reset_pin() when the sequence reaches it.
+         */
         auto block = begin(Direction::FromDevice, 0);
         block.command(Command::Debug)
             .command(DebugCommand::ApiV1Enter)

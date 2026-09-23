@@ -176,35 +176,34 @@ TEST(ProgrammerV2, EntersDebugOverSwd)
     V2 f(a_v2());
     f.recorder->answers({0x80, 0});
 
-    ASSERT_TRUE(f.programmer->enter_debug(DebugMode::Swd, ResetMode::Normal).ok());
+    ASSERT_TRUE(f.programmer->enter_debug(DebugMode::Swd).ok());
 
     EXPECT_EQ(f.recorder->sent[0][0], 0xf2);
     EXPECT_EQ(f.recorder->sent[0][1], 0x30); /* ApiV2Enter */
     EXPECT_EQ(f.recorder->sent[0][2], 0xa3); /* EnterSwd */
 }
 
-TEST(ProgrammerV2, HoldsAndReleasesResetWhenAskedToConnectUnderIt)
+TEST(ProgrammerV2, EntersDebugAndNothingElse)
 {
     V2 f(a_v2());
     f.recorder->answers({0x80, 0});
 
-    ASSERT_TRUE(f.programmer->enter_debug(DebugMode::Swd, ResetMode::UnderReset).ok());
+    ASSERT_TRUE(f.programmer->enter_debug(DebugMode::Swd).ok());
 
-    ASSERT_EQ(f.recorder->sent.size(), 3u);
-
-    /* Held low, then entered, then released high. */
-    EXPECT_EQ(f.recorder->sent[0][1], 0x3c);
-    EXPECT_EQ(f.recorder->sent[0][2], 0x00);
-    EXPECT_EQ(f.recorder->sent[1][1], 0x30);
-    EXPECT_EQ(f.recorder->sent[2][1], 0x3c);
-    EXPECT_EQ(f.recorder->sent[2][2], 0x01);
+    /*
+     * Exactly one command. Holding the target in reset and catching it on the
+     * way out used to happen here and now belongs to connect_to_target, which
+     * is where that sequence is tested.
+     */
+    ASSERT_EQ(f.recorder->sent.size(), 1u);
+    EXPECT_EQ(f.recorder->sent[0][1], 0x30);
 }
 
 TEST(ProgrammerV2, RefusesJtagRatherThanSendingSomethingUnrecognised)
 {
     V2 f(a_v2());
 
-    auto entered = f.programmer->enter_debug(DebugMode::Jtag, ResetMode::Normal);
+    auto entered = f.programmer->enter_debug(DebugMode::Jtag);
 
     ASSERT_FALSE(entered.ok());
     EXPECT_EQ(entered.error().code(), ErrorCode::NotSupported);

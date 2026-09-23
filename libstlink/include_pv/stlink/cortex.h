@@ -54,6 +54,35 @@ namespace stlink
     inline constexpr std::uint32_t kDhcsrResetSince = 1u << 25;
 
     /**
+     * @brief Application interrupt and reset control register.
+     *
+     * Section B3.2.6 of the ARMv7-M manual. How the core is reset when the
+     * board's nRST pin is not wired, which is common enough to matter.
+     */
+    inline constexpr std::uint32_t kAircr = 0xe000ed0c;
+
+    /** @brief The password AIRCR demands; a write without it is ignored. */
+    inline constexpr std::uint32_t kAircrKey = 0x05fa << 16;
+
+    /** @brief Ask the core to reset itself. */
+    inline constexpr std::uint32_t kAircrSystemReset = 1u << 2;
+
+    /**
+     * @brief Debug exception and monitor control register.
+     *
+     * Section C1.6.5. This lives in the debug power domain, so what is armed
+     * here survives a reset of the core, which is the whole trick behind
+     * catching a target at its reset vector rather than after it has run.
+     */
+    inline constexpr std::uint32_t kDemcr = 0xe000edfc;
+
+    /** @brief Halt the core as it comes out of reset, before it executes. */
+    inline constexpr std::uint32_t kDemcrResetVectorCatch = 1u << 0;
+
+    /** @brief Enable the trace and debug blocks. */
+    inline constexpr std::uint32_t kDemcrTraceEnable = 1u << 24;
+
+    /**
      * @brief CPUID base register, which says which core this is.
      *
      * Section B3.2.3 of the ARMv7-M manual. Reading it is how the library

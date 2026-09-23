@@ -22,6 +22,7 @@
 
 #include <stlink/chip_database.h>
 #include <stlink/chip_identity.h>
+#include <stlink/connect.h>
 #include <stlink/flash.h>
 #include <stlink/log.h>
 #include <stlink/programmer.h>
@@ -217,11 +218,11 @@ namespace stlink
                 STLINK_LOG_DBG("this programmer takes no clock rate, using whatever it has");
             }
 
-            auto entered = programmer.enter_debug(options.debug, options.reset);
+            auto connected = connect_to_target(programmer, options);
 
-            if (!entered.ok())
+            if (!connected.ok())
             {
-                return entered.error().wrap(ErrorCode::TargetUnknown, "connecting to the chip");
+                return connected.error().wrap(ErrorCode::TargetUnknown, "connecting to the chip");
             }
 
             auto asked = read_chip_id(programmer);
@@ -681,7 +682,16 @@ namespace stlink
 
             auto programmer = opened.value();
 
-            auto chip = read_the_chip(*programmer, DeviceOptions{});
+            /*
+             * Hot plug, explicitly. find() is a look rather than an intent to
+             * use, and the default mode resets the target: sweeping the bus
+             * would otherwise reset every board attached to it, including the
+             * ones the caller was not asking about.
+             */
+            DeviceOptions looking;
+            looking.reset = ResetMode::HotPlug;
+
+            auto chip = read_the_chip(*programmer, looking);
 
             if (!chip.ok())
             {

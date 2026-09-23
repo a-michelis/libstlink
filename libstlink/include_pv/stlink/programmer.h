@@ -126,8 +126,14 @@ namespace stlink
         /** @brief Leave firmware update mode, if that is where it is. */
         [[nodiscard]] virtual VoidResult exit_dfu() = 0;
 
-        /** @brief Start talking to the target. */
-        [[nodiscard]] virtual VoidResult enter_debug(DebugMode debug, ResetMode reset) = 0;
+        /**
+         * @brief Start talking to the target.
+         *
+         * Only that. Holding the target in reset, catching it on the way out
+         * and resetting it afterwards are a sequence rather than a command,
+         * and belong to connect_to_target() a layer up.
+         */
+        [[nodiscard]] virtual VoidResult enter_debug(DebugMode debug) = 0;
 
         /** @brief Stop talking to it and let it run on its own. */
         [[nodiscard]] virtual VoidResult exit_debug() = 0;
