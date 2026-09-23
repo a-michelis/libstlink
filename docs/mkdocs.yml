@@ -1,0 +1,61 @@
+###
+# Documentation site.
+#
+# Everything the documentation needs lives in this directory: the pages in
+# src/, this configuration, and the generated site/ which is not committed.
+# Nothing about the documentation sits at the root of the repository.
+#
+# Two pip installs and nothing else:
+#
+#     pip install mkdocs mkdocs-material
+#
+#     cd docs && mkdocs serve
+#     mkdocs serve -f docs/mkdocs.yml      # or from the repository root
+#
+# Material rather than the bundled theme because the diagrams are mermaid, and
+# superfences renders those client side with no plugin and no build step. The
+# custom_fences block below is what turns ```mermaid into a diagram rather than
+# a code listing.
+###
+
+site_name: libstlink
+site_description: Library and tools for STMicroelectronics ST-LINK programmers
+
+# Both relative to this file, so the layout holds wherever mkdocs is invoked from.
+docs_dir: src
+site_dir: site
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+nav:
+  - Home: index.md
+  - Architecture: architecture.md
+  - Interfaces: interfaces.md
+  - Conventions: conventions.md
+  - Building: building.md

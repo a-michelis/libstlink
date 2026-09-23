@@ -1,0 +1,13 @@
+# Only needed to build the documentation site, and only by someone changing it.
+#
+#     pip install -r docs/requirements.txt
+#     mkdocs serve -f docs/mkdocs.yml
+#
+# Building or installing the library needs none of this, and neither does
+# reading the documentation: the pages are markdown and GitHub renders them,
+# mermaid diagrams included.
+#
+# Pinned, so a rebuild years from now produces the same site.
+
+mkdocs==1.6.1
+mkdocs-material==9.7.1

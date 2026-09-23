@@ -24,6 +24,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 include(GNUInstallDirs)
 
 option(STLINK_BUILD_TESTS "Build the test suite" OFF)
+option(STLINK_BUILD_DOCS "Regenerate the manual page and build the documentation site" OFF)
 
 add_subdirectory(libstlink)
 
@@ -33,3 +34,8 @@ if (STLINK_BUILD_TESTS)
     enable_testing()
     add_subdirectory(libstlink/tests)
 endif()
+
+# Always entered, unlike tests, because it installs the committed manual page
+# and that should happen whether or not anyone can regenerate it. The option
+# only controls whether the generating targets are defined.
+add_subdirectory(docs)
