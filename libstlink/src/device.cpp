@@ -26,6 +26,7 @@
 #include <stlink/log.h>
 #include <stlink/programmer.h>
 #include <stlink/protocol.h>
+#include <stlink/trace.h>
 #include <stlink/transport.h>
 
 namespace stlink
@@ -165,15 +166,58 @@ namespace stlink
             return info;
         }
 
+        /** @brief What the programmer said about itself during the handshake. */
+        ProgrammerInfo programmer_info_of(const IProgrammer &programmer)
+        {
+            ProgrammerInfo info;
+
+            info.debug_firmware = programmer.version().jtag;
+            info.swim_firmware = programmer.version().swim;
+            info.max_trace_frequency = programmer.max_trace_frequency();
+
+            return info;
+        }
+
+        /** @brief Whether this chip's description claims an SWO pin. */
+        bool chip_has_swo(std::uint32_t chip_id)
+        {
+            const ChipDescription *known = ChipDatabase::instance().find(chip_id);
+
+            return known != nullptr && has_flag(known->flags, ChipFlags::Swo);
+        }
+
         /**
          * @brief Connect through to the chip and describe it.
          *
          * Leaves the programmer in debug mode, since every caller here either
          * keeps it or drops it immediately afterwards.
          */
-        Result<ChipInfo> read_the_chip(IProgrammer &programmer)
+        Result<ChipInfo> read_the_chip(IProgrammer &programmer, const DeviceOptions &options)
         {
-            auto entered = programmer.enter_debug(DebugMode::Swd, ResetMode::Normal);
+            /*
+             * Before connecting rather than after, because the handshake is
+             * itself carried at this rate: one a marginal target cannot
+             * sustain fails the connection, not merely the traffic after it.
+             *
+             * A programmer that cannot be told a rate at all, which is every
+             * ST-LINK/V1, is only a problem for a caller who asked for a
+             * particular one. Asking for the default and being told there is
+             * no choice to make is not a failure to connect.
+             */
+            auto clocked = programmer.set_clock(options.clock_hz);
+
+            if (!clocked.ok())
+            {
+                if (options.clock_hz != 0)
+                {
+                    return clocked.error().wrap(ErrorCode::InvalidArgument,
+                                                "setting the debug clock");
+                }
+
+                STLINK_LOG_DBG("this programmer takes no clock rate, using whatever it has");
+            }
+
+            auto entered = programmer.enter_debug(options.debug, options.reset);
 
             if (!entered.ok())
             {
@@ -288,6 +332,102 @@ namespace stlink
         };
 
         /**
+         * @brief Trace, where one end or the other cannot carry it.
+         *
+         * Returned when the programmer has no trace engine, which is every
+         * ST-LINK/V1 and an early V2, or when the chip has no SWO pin. A
+         * caller is expected to have asked has_trace() first; this is what
+         * happens when they did not.
+         */
+        class UnavailableTrace final : public ITrace
+        {
+        public:
+            VoidResult start(std::uint32_t) override
+            {
+                return refuse();
+            }
+
+            VoidResult stop() override
+            {
+                return refuse();
+            }
+
+            bool running() const noexcept override
+            {
+                return false;
+            }
+
+            Result<std::size_t> read(std::uint8_t *, std::size_t) override
+            {
+                return refuse().error();
+            }
+
+            std::uint32_t max_frequency() const noexcept override
+            {
+                return 0;
+            }
+
+        private:
+            static VoidResult refuse()
+            {
+                return Error(ErrorCode::NotSupported,
+                             "trace needs both a programmer that carries it and a chip with the pin");
+            }
+        };
+
+        /** @brief Trace, where both ends have it. */
+        class ProgrammerTrace final : public ITrace
+        {
+        public:
+            explicit ProgrammerTrace(IProgrammer &programmer) noexcept : programmer_(programmer) {}
+
+            VoidResult start(std::uint32_t hz) override
+            {
+                auto started = programmer_.trace_enable(hz);
+
+                if (started.ok())
+                {
+                    running_ = true;
+                }
+
+                return started;
+            }
+
+            VoidResult stop() override
+            {
+                auto stopped = programmer_.trace_disable();
+
+                /*
+                 * Cleared either way. A stop that failed still leaves us with
+                 * no reason to believe trace is arriving, and claiming it is
+                 * running would be the more misleading of the two answers.
+                 */
+                running_ = false;
+
+                return stopped;
+            }
+
+            bool running() const noexcept override
+            {
+                return running_;
+            }
+
+            Result<std::size_t> read(std::uint8_t *data, std::size_t size) override
+            {
+                return programmer_.trace_read(data, size);
+            }
+
+            std::uint32_t max_frequency() const noexcept override
+            {
+                return programmer_.max_trace_frequency();
+            }
+
+        private:
+            IProgrammer &programmer_;
+            bool running_ = false;
+        };
+
+        /**
          * @brief Which devices are open, so that a second one is refused.
          *
          * Process wide, because the thing being protected is the programmer,
@@ -325,8 +465,17 @@ namespace stlink
         class Device final : public IDevice
         {
         public:
-            Device(std::unique_ptr<IProgrammer> programmer, DeviceInfo info, std::string key)
-                : programmer_(std::move(programmer)), info_(std::move(info)), key_(std::move(key))
+            Device(std::unique_ptr<IProgrammer> programmer, DeviceInfo info, std::string key,
+                   bool chip_has_swo)
+                : programmer_(std::move(programmer)), info_(std::move(info)), key_(std::move(key)),
+                  trace_(*programmer_),
+                  /*
+                   * Both ends, decided once here rather than on every call.
+                   * The programmer's half is whether it reports a trace rate
+                   * at all; the chip's half is whether its description claims
+                   * the pin.
+                   */
+                  has_trace_(chip_has_swo && programmer_->max_trace_frequency() != 0)
             {
             }
 
@@ -406,16 +555,70 @@ namespace stlink
                 return programmer_->write_register(index, value);
             }
 
+            VoidResult reset_pin(bool asserted) override
+            {
+                return programmer_->reset_pin(asserted);
+            }
+
+            Result<std::uint32_t> target_voltage() override
+            {
+                return programmer_->target_voltage();
+            }
+
+            Result<std::vector<std::uint32_t>> clock_rates() override
+            {
+                return programmer_->clock_rates();
+            }
+
+            VoidResult set_clock(std::uint32_t hz) override
+            {
+                return programmer_->set_clock(hz);
+            }
+
+            Result<CoreRegisters> read_registers() override
+            {
+                return programmer_->read_registers();
+            }
+
+            Result<std::uint32_t> read_debug_register(std::uint32_t address) override
+            {
+                return programmer_->read_debug_register(address);
+            }
+
+            VoidResult write_debug_register(std::uint32_t address, std::uint32_t value) override
+            {
+                return programmer_->write_debug_register(address, value);
+            }
+
             IFlash &flash() noexcept override
             {
                 return flash_;
             }
 
+            bool has_trace() const noexcept override
+            {
+                return has_trace_;
+            }
+
+            ITrace &trace() noexcept override
+            {
+                if (has_trace_)
+                {
+                    return trace_;
+                }
+
+                return unavailable_trace_;
+            }
+
         private:
+            /* programmer_ first: trace_ holds a reference to what it owns. */
             std::unique_ptr<IProgrammer> programmer_;
             DeviceInfo info_;
             std::string key_;
             UnsupportedFlash flash_;
+            ProgrammerTrace trace_;
+            UnavailableTrace unavailable_trace_;
+            bool has_trace_ = false;
         };
 
         /** @brief Every attached probe this library has anything to say to. */
@@ -478,7 +681,7 @@ namespace stlink
 
             auto programmer = opened.value();
 
-            auto chip = read_the_chip(*programmer);
+            auto chip = read_the_chip(*programmer, DeviceOptions{});
 
             if (!chip.ok())
             {
@@ -491,6 +694,7 @@ namespace stlink
             DeviceInfo info;
 
             info.core_info = basic;
+            info.programmer = programmer_info_of(*programmer);
             info.chip = chip.value();
 
             if (filter.chip_id.has_value() && *filter.chip_id != info.chip.id)
@@ -510,7 +714,8 @@ namespace stlink
         return found;
     }
 
-    Result<std::unique_ptr<IDevice>> IDevice::create(const BasicDeviceInfo &info)
+    Result<std::unique_ptr<IDevice>> IDevice::create(const BasicDeviceInfo &info,
+                                                    const DeviceOptions &options)
     {
         const std::string key = key_of(info);
 
@@ -537,7 +742,7 @@ namespace stlink
 
         auto programmer = opened.value();
 
-        auto chip = read_the_chip(*programmer);
+        auto chip = read_the_chip(*programmer, options);
 
         if (!chip.ok())
         {
@@ -549,12 +754,17 @@ namespace stlink
         DeviceInfo full;
 
         full.core_info = info;
+        full.programmer = programmer_info_of(*programmer);
         full.chip = chip.value();
 
-        return std::unique_ptr<IDevice>(new Device(std::move(programmer), std::move(full), key));
+        const bool swo = chip_has_swo(full.chip.id);
+
+        return std::unique_ptr<IDevice>(
+            new Device(std::move(programmer), std::move(full), key, swo));
     }
 
-    Result<std::unique_ptr<IDevice>> IDevice::create(const DeviceInfo &info)
+    Result<std::unique_ptr<IDevice>> IDevice::create(const DeviceInfo &info,
+                                                    const DeviceOptions &options)
     {
         /*
          * The chip on a full sheet was read when it was found, and a chip
@@ -563,6 +773,6 @@ namespace stlink
          * device that silently disagrees with the sheet it was opened from
          * would be a miserable thing to debug.
          */
-        return create(info.core_info);
+        return create(info.core_info, options);
     }
 } // namespace stlink

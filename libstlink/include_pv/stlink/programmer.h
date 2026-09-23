@@ -22,18 +22,17 @@
 #include <cstdint>
 #include <vector>
 
+/*
+ * DebugMode, ResetMode and CoreRegisters live in the public header rather than
+ * here, because a caller choosing how to connect needs to name them. They are
+ * the same types either way; this header does not redeclare them.
+ */
+#include <stlink/device.h>
 #include <stlink/result.h>
 #include <stlink/transport.h>
 
 namespace stlink
 {
-    /** @brief Which wire protocol the programmer uses to reach the target. */
-    enum class DebugMode : std::uint8_t
-    {
-        Swd,
-        Jtag,
-    };
-
     /** @brief What the programmer is currently doing. */
     enum class ProgrammerMode : std::uint8_t
     {
@@ -53,14 +52,6 @@ namespace stlink
         DebugRunning, /**< Executing, with the debug unit attached. */
     };
 
-    /** @brief How the target is held while the debug connection is made. */
-    enum class ResetMode : std::uint8_t
-    {
-        Normal,      /**< Connect to a running target. */
-        UnderReset,  /**< Hold nRST low while connecting. */
-        HotPlug,     /**< Attach without resetting anything. */
-    };
-
     /** @brief What the programmer reports about itself. */
     struct ProgrammerVersion
     {
@@ -69,17 +60,6 @@ namespace stlink
         std::uint8_t swim = 0;    /**< Firmware revision of the SWIM engine, 0 when absent. */
         std::uint16_t vid = 0;
         std::uint16_t pid = 0;
-    };
-
-    /** @brief The Cortex-M core registers, as the programmer returns them. */
-    struct CoreRegisters
-    {
-        std::uint32_t r[16] = {};
-        std::uint32_t xpsr = 0;
-        std::uint32_t main_sp = 0;
-        std::uint32_t process_sp = 0;
-        std::uint32_t rw = 0;
-        std::uint32_t rw2 = 0;
     };
 
     /**

@@ -108,6 +108,30 @@ namespace stlink
     };
 
     /**
+     * @brief What the programmer reports about itself once it has been asked.
+     *
+     * Not in BasicDeviceInfo, because enumerate() never asks: it reads what
+     * USB already knows and opens nothing. These come from the version
+     * exchange, so they are known only once a connection has been made.
+     */
+    struct STLINK_API ProgrammerInfo
+    {
+        /** @brief The debug engine's firmware revision, the J in "J41". */
+        std::uint8_t debug_firmware = 0;
+
+        /** @brief The SWIM engine's revision, or zero when it has none. */
+        std::uint8_t swim_firmware = 0;
+
+        /**
+         * @brief The fastest trace this programmer will carry, in hertz.
+         *
+         * Zero when it carries none at all, which is every ST-LINK/V1 at any
+         * revision and a V2 below a certain firmware. See IDevice::has_trace().
+         */
+        std::uint32_t max_trace_frequency = 0;
+    };
+
+    /**
      * @brief A programmer and the chip behind it.
      *
      * Read only, and a plain value: copy it, keep it, pass it around.
@@ -117,8 +141,62 @@ namespace stlink
         /** @brief The programmer, exactly as enumerate() would report it. */
         BasicDeviceInfo core_info;
 
+        /** @brief What the programmer said about itself when it was asked. */
+        ProgrammerInfo programmer;
+
         /** @brief The chip on the other side. */
         ChipInfo chip;
+    };
+
+    /** @brief Which wire protocol to reach the target over. */
+    enum class DebugMode : std::uint8_t
+    {
+        Swd,
+        Jtag, /**< Not implemented over USB by any firmware; refused. */
+    };
+
+    /** @brief How the target is held while the debug connection is made. */
+    enum class ResetMode : std::uint8_t
+    {
+        Normal,     /**< Connect to a running target. */
+        UnderReset, /**< Hold nRST low while connecting. */
+        HotPlug,    /**< Attach without resetting anything. */
+    };
+
+    /**
+     * @brief How to connect. Every field has a usable default.
+     *
+     * UnderReset is the thing to reach for when a target will not answer.
+     * Firmware that disables the debug unit early, or puts the core to sleep,
+     * leaves nothing to connect to by the time an ordinary attach happens;
+     * holding nRST low while connecting gets in first.
+     */
+    struct STLINK_API DeviceOptions
+    {
+        DebugMode debug = DebugMode::Swd;
+        ResetMode reset = ResetMode::Normal;
+
+        /**
+         * @brief Debug clock in hertz, or zero for this generation's default.
+         *
+         * Must be one of the rates the programmer offers; a rate that is not
+         * on offer is refused rather than rounded, because rounding up
+         * overclocks a connection that may not carry it and rounding down
+         * turns a request into a ceiling without saying so. Zero asks for a
+         * conservative default rather than the fastest available.
+         */
+        std::uint32_t clock_hz = 0;
+    };
+
+    /** @brief The Cortex-M core registers, as the programmer returns them. */
+    struct STLINK_API CoreRegisters
+    {
+        std::uint32_t r[16] = {};
+        std::uint32_t xpsr = 0;
+        std::uint32_t main_sp = 0;
+        std::uint32_t process_sp = 0;
+        std::uint32_t rw = 0;
+        std::uint32_t rw2 = 0;
     };
 
     /** @brief Which devices to report. Everything is optional. */
@@ -163,6 +241,7 @@ namespace stlink
     };
 
     class IFlash;
+    class ITrace;
 
     /**
      * @brief An STM32, and the programmer reaching it.
@@ -184,16 +263,26 @@ namespace stlink
          *
          * One device per programmer: creating a second for a programmer that
          * is already open fails rather than returning the first.
+         *
+         * @param info    the device to connect to
+         * @param options how to connect; the default is SWD without resetting
+         * @return the connected device, or why it could not be
          */
-        [[nodiscard]] static Result<std::unique_ptr<IDevice>> create(const DeviceInfo &info);
+        [[nodiscard]] static Result<std::unique_ptr<IDevice>> create(
+            const DeviceInfo &info, const DeviceOptions &options = {});
 
         /**
          * @brief Connect to a programmer found by enumerate().
          *
          * The chip is read on connection, since a basic sheet does not say
          * what it is.
+         *
+         * @param info    the programmer to connect through
+         * @param options how to connect; the default is SWD without resetting
+         * @return the connected device, or why it could not be
          */
-        [[nodiscard]] static Result<std::unique_ptr<IDevice>> create(const BasicDeviceInfo &info);
+        [[nodiscard]] static Result<std::unique_ptr<IDevice>> create(
+            const BasicDeviceInfo &info, const DeviceOptions &options = {});
 
         /** @brief The programmer and chip this device was created from. */
         [[nodiscard]] virtual const DeviceInfo &info() const noexcept = 0;
@@ -208,6 +297,36 @@ namespace stlink
         /** @brief Whether the chip is currently running. */
         [[nodiscard]] virtual Result<bool> is_running() = 0;
 
+        /**
+         * @brief Drive the target's reset pin directly.
+         *
+         * Not the same as reset(), which goes through the debug unit. This is
+         * the physical line, and holding it asserted is how a board is kept
+         * in reset while something else is arranged.
+         */
+        [[nodiscard]] virtual VoidResult reset_pin(bool asserted) = 0;
+
+        /* ---- The programmer ------------------------------------------ */
+
+        /** @brief Voltage on the target's reference pin, in millivolts. */
+        [[nodiscard]] virtual Result<std::uint32_t> target_voltage() = 0;
+
+        /**
+         * @brief The debug clock rates this programmer will accept, in hertz.
+         *
+         * Empty when the programmer cannot be told a rate at all.
+         */
+        [[nodiscard]] virtual Result<std::vector<std::uint32_t>> clock_rates() = 0;
+
+        /**
+         * @brief Set the debug clock to exactly @p hz.
+         *
+         * One of the rates clock_rates() reported and nothing else. Zero asks
+         * for this generation's conservative default. See DeviceOptions for
+         * why a rate that is not on offer is refused rather than rounded.
+         */
+        [[nodiscard]] virtual VoidResult set_clock(std::uint32_t hz) = 0;
+
         /* ---- Memory -------------------------------------------------- */
 
         [[nodiscard]] virtual VoidResult read(std::uint32_t address,
@@ -221,6 +340,31 @@ namespace stlink
         [[nodiscard]] virtual Result<std::uint32_t> read_register(std::uint8_t index) = 0;
         [[nodiscard]] virtual VoidResult write_register(std::uint8_t index, std::uint32_t value) = 0;
 
+        /**
+         * @brief Every core register in one transfer.
+         *
+         * The programmer returns the whole file at once, so this costs one
+         * round trip where reading all of them singly costs twenty one. That
+         * is what a debugger wants after a step or a halt.
+         */
+        [[nodiscard]] virtual Result<CoreRegisters> read_registers() = 0;
+
+        /* ---- The debug unit ------------------------------------------ */
+
+        /**
+         * @brief Read a debug unit register.
+         *
+         * Not target memory: these reach the debug port itself, and are how
+         * the core is halted, stepped and inspected underneath the calls
+         * above. Reaching for them means stepping outside what this library
+         * promises about the chip's state, so prefer the calls above where
+         * they do the job.
+         */
+        [[nodiscard]] virtual Result<std::uint32_t> read_debug_register(std::uint32_t address) = 0;
+
+        [[nodiscard]] virtual VoidResult write_debug_register(std::uint32_t address,
+                                                               std::uint32_t value) = 0;
+
         /* ---- Flash --------------------------------------------------- */
 
         /**
@@ -229,6 +373,28 @@ namespace stlink
          * Owned by the device and valid for as long as it is.
          */
         [[nodiscard]] virtual IFlash &flash() noexcept = 0;
+
+        /* ---- Trace --------------------------------------------------- */
+
+        /**
+         * @brief Whether trace output can be delivered at all.
+         *
+         * Both ends have to have it. The programmer must carry trace, which
+         * no ST-LINK/V1 does at any revision and a V2 does only from a
+         * certain firmware, and the chip must actually have the SWO pin,
+         * which a fair number do not.
+         *
+         * Askable up front so a caller can grey out a log window rather than
+         * discover the fact through a NotSupported failure.
+         */
+        [[nodiscard]] virtual bool has_trace() const noexcept = 0;
+
+        /**
+         * @brief Trace output, owned by the device and valid as long as it is.
+         *
+         * When has_trace() is false every operation on it refuses.
+         */
+        [[nodiscard]] virtual ITrace &trace() noexcept = 0;
 
     protected:
         IDevice() = default;
